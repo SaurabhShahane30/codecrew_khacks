@@ -1,2 +1,14 @@
 # codecrew_khacks
-This is the repository for final hackathon 
+
+Team name : CodeCrew
+
+Github IDs of Team Members :
+Saurabh Shahane : SaurabhShahane30
+Asawari Patil : AsawariPatil27
+Anuj Lolam : xdanujj
+Jayaram Somasi : Kentucky-Kaneki
+
+
+
+
+
