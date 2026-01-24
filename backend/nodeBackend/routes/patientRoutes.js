@@ -1,7 +1,9 @@
 import express from "express";
-import { signup, signin } from "../controllers/patientController.js";
+import { authMiddleware, signup, signin, fetchPatientInfo } from "../controllers/patientController.js";
 
 const router = express.Router();
+
+router.get("/", authMiddleware, fetchPatientInfo);
 
 router.post("/signup", signup);
 router.post("/signin", signin);

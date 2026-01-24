@@ -3,6 +3,21 @@ import jwt from "jsonwebtoken";
 
 import Patient from "../models/patient.js";
 
+export const authMiddleware = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ message: "No token" });
+
+    const token = authHeader.split(" ")[1]; // Bearer TOKEN
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid token" });
+  }
+};
+
 export const signup = async (req, res) => {
   try {
     const { name, phone, password } = req.body;
@@ -64,5 +79,20 @@ export const signin = async (req, res) => {
     console.log("❌ Sigin unsuccessfull");
     console.error("Signin error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+export const fetchPatientInfo = async (req, res) => {
+  try {
+    console.log("🚀 Fetching Info of", req.user.id);
+
+    const patient = await Patient.findById(req.user.id).select('-password');
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+    
+    console.log("✅ Patient Info fetched successfully");
+    res.json(patient);
+  } catch (err) {
+    console.log("❌ Fetching unsuccessfull");
+    res.status(500).json({ message: 'Server error' });
   }
 };
