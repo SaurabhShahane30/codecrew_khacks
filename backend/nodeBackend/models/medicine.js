@@ -65,6 +65,12 @@ const MedicineSchema = new mongoose.Schema(
       default: 0
     },
 
+    delayed: {
+      type: Number,
+      required: false,
+      default: 0
+    },
+
     photoUrl: {
       type: String,
       required: false,

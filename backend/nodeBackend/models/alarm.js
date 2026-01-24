@@ -22,19 +22,22 @@ const AlarmSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-
-    medicineIds: [
+    
+    medicines: [
       {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Medicine",
-      },
-    ],
-
-    dates: [
-      {
-        type: String, // "YYYY-MM-DD"
-      },
-    ],
+        medicineId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Medicine",
+          required: true,
+        },
+        dates: [
+          {
+            type: String, // "YYYY-MM-DD"
+            required: true,
+          }
+        ]
+      }
+    ]
   },
   { timestamps: true }
 );

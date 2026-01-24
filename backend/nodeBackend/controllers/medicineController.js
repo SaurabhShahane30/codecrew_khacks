@@ -99,21 +99,13 @@ function generateDailyDates(startDate, durationDays) {
   return dates;
 }
 
-function generateAlternateDates(startDate, durationDays) {
+function generateAlternateDates(startDate, doseCount) {
   const dates = [];
   let currentDate = new Date(startDate);
-  let takeToday = true;
 
-  for (let i = 0; i < durationDays; i++) {
-    if (takeToday) {
-      dates.push(formatDate(currentDate));
-    }
-
-    // toggle
-    takeToday = !takeToday;
-
-    // move one day forward
-    currentDate = addDays(currentDate, 1);
+  for (let i = 0; i < doseCount; i++) {
+    dates.push(formatDate(currentDate));
+    currentDate = addDays(currentDate, 2); // 🔁 jump 2 days
   }
 
   return dates;
@@ -147,7 +139,7 @@ const attachAlarmsToMedicine = async ({
   const patient = await Patient.findById(patientId);
   if (!patient) throw new Error("Patient not found");
 
-  const startDate = new Date(); // ✅ ALWAYS TODAY
+  const startDate = new Date(); // always today
   let dates = [];
 
   if (medicine.frequency === "Daily") {
@@ -166,7 +158,7 @@ const attachAlarmsToMedicine = async ({
     );
   }
 
-  // ---- Standard meal alarms ----
+  // ---------------- Standard alarms ----------------
   for (const code of alarmCodes) {
     const resolvedTime = resolveAlarmTime(code, patient.mealTimes);
 
@@ -178,22 +170,24 @@ const attachAlarmsToMedicine = async ({
           alarmCode: code,
           isCustom: false,
           time: resolvedTime,
-          dates,
         },
-        $addToSet: {
-          medicineIds: medicine._id,
-        },
+        $push: {
+          medicines: {
+            medicineId: medicine._id,
+            dates: dates
+          }
+        }
       },
-      { upsert: true, new: true }
+      { upsert: true }
     );
   }
 
-  // ---- Custom alarms ----
+  // ---------------- Custom alarms ----------------
   if (customTimes?.length > 0) {
     for (const time of customTimes) {
       const time12h = time.includes("AM") || time.includes("PM")
-      ? time
-      : convert24hTo12h(time);
+        ? time
+        : convert24hTo12h(time);
 
       const customCode = timeToDeterministicInt32(time12h);
 
@@ -205,13 +199,15 @@ const attachAlarmsToMedicine = async ({
             alarmCode: customCode,
             time: time12h,
             isCustom: true,
-            dates,
           },
-          $addToSet: {
-            medicineIds: medicine._id,
-          },
+          $push: {
+            medicines: {
+              medicineId: medicine._id,
+              dates: dates
+            }
+          }
         },
-        { upsert: true, new: true }
+        { upsert: true }
       );
 
       medicine.alarmKeys.push(customCode);
@@ -279,14 +275,14 @@ export const addMedicine = async (req, res) => {
       type, 
       alarmKeys: alarmCodes, 
       frequency, 
-      days, 
+      days,
       startDay, 
       doseCount, 
       isCritical, 
       durationDays,
       photoUrl
     });
-    console.log("✅ Medicine created:", medicine._id);
+    console.log("✅ Medicine created:", medicine);
 
     // -------------------------
     // 2. Create / Attach Alarms
@@ -325,9 +321,7 @@ export const fetchTodaysMedicines = async (req, res) => {
   try {
     const patientId = req.user.id;
 
-    // 📥 Date from query
     const date = req.query.date;
-
     if (!date) {
       return res.status(400).json({
         success: false,
@@ -337,14 +331,25 @@ export const fetchTodaysMedicines = async (req, res) => {
 
     console.log(`🚀 Fetching ${patientId}'s medicines for ${date}`);
 
-    const alarms = await Alarm.find({
-      patientId,
-      dates: date, // 🔥 direct date match
-    }).populate("medicineIds");
+    const alarms = await Alarm.find({ patientId }).populate({
+      path: "medicines.medicineId",
+    });
 
-    const medicines = alarms.flatMap(a => a.medicineIds);
+    // 🔁 extract only medicines active on that date
+    const medicines = [];
 
-    console.log("Fetched medicines:", medicines);
+    for (const alarm of alarms) {
+      for (const medEntry of alarm.medicines) {
+        if (medEntry.dates.includes(date)) {
+          medicines.push({
+            ...medEntry.medicineId.toObject(),
+            alarmTime: alarm.time,
+            alarmCode: alarm.alarmCode,
+            isCustom: alarm.isCustom,
+          });
+        }
+      }
+    }
 
     res.json({
       success: true,

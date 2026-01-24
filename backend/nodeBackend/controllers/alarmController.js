@@ -25,59 +25,47 @@ export const getTodayUpcomingAlarms = async (req, res) => {
     console.log("🚀 Fetch Today's Upcoming Alarms for", patientId);
 
     const now = new Date();
-    const today = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
-    // current time in minutes since midnight
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    // -------------------------
-    // Fetch only today's alarms
-    // -------------------------
-    const alarms = await Alarm.find({
-      patientId,
-      dates: today, // ✅ date-based filtering
-    }).populate({
-      path: "medicineIds",
+    const alarms = await Alarm.find({ patientId }).populate({
+      path: "medicines.medicineId",
       select: "name type doseCount isCritical durationDays"
     });
 
-    // -------------------------
-    // Filter alarms after now
-    // -------------------------
     const upcomingAlarms = alarms
-      .filter(alarm => {
-        if (!alarm.time) return false;
-
+      .map(alarm => {
         const alarmMinutes = timeToMinutes(alarm.time);
-        if (alarmMinutes === null) return false;
+        if (alarmMinutes === null || alarmMinutes <= currentMinutes) return null;
 
-        return alarmMinutes > currentMinutes; // ⏱️ upcoming only
-      })
-      .sort((a, b) => {
-        const aMin = timeToMinutes(a.time);
-        const bMin = timeToMinutes(b.time);
-        return aMin - bMin;
-      })
-      .map(alarm => ({
-        alarmId: alarm._id,
-        alarmCode: alarm.alarmCode,
-        time: alarm.time,
-        isCustom: alarm.isCustom,
-        medicines: alarm.medicineIds.map(med => ({
-          id: med._id,
-          name: med.name,
-          type: med.type,
-          doseCount: med.doseCount,
-          isCritical: med.isCritical,
-          durationDays: med.durationDays
-        }))
-      }));
+        // medicines active today
+        const todaysMeds = alarm.medicines
+          .filter(m => m.dates.includes(today))
+          .map(m => ({
+            id: m.medicineId._id,
+            name: m.medicineId.name,
+            type: m.medicineId.type,
+            doseCount: m.medicineId.doseCount,
+            isCritical: m.medicineId.isCritical,
+            durationDays: m.medicineId.durationDays
+          }));
 
-    // -------------------------
-    // Response (UNCHANGED STRUCTURE)
-    // -------------------------
-    console.log("✅ Fetched upcoming alarms for today", upcomingAlarms);
-    
+        if (todaysMeds.length === 0) return null;
+
+        return {
+          alarmId: alarm._id,
+          alarmCode: alarm.alarmCode,
+          time: alarm.time,
+          isCustom: alarm.isCustom,
+          medicines: todaysMeds
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+
+    console.log("✅ Upcoming alarms fetched:", upcomingAlarms);
+
     res.json({
       success: true,
       date: today,
