@@ -25,21 +25,24 @@ export const getTodayUpcomingAlarms = async (req, res) => {
     console.log("🚀 Fetch Today's Upcoming Alarms for", patientId);
 
     const now = new Date();
+    const today = now.toISOString().split("T")[0]; // YYYY-MM-DD
 
     // current time in minutes since midnight
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     // -------------------------
-    // Fetch all alarms of patient + populate medicine data
+    // Fetch only today's alarms
     // -------------------------
-    const alarms = await Alarm.find({ patientId })
-      .populate({
-        path: "medicineIds",
-        select: "name type doseCount isCritical durationDays"
-      });
+    const alarms = await Alarm.find({
+      patientId,
+      dates: today, // ✅ date-based filtering
+    }).populate({
+      path: "medicineIds",
+      select: "name type doseCount isCritical durationDays"
+    });
 
     // -------------------------
-    // Filter alarms for today + after now
+    // Filter alarms after now
     // -------------------------
     const upcomingAlarms = alarms
       .filter(alarm => {
@@ -48,7 +51,7 @@ export const getTodayUpcomingAlarms = async (req, res) => {
         const alarmMinutes = timeToMinutes(alarm.time);
         if (alarmMinutes === null) return false;
 
-        return alarmMinutes > currentMinutes;
+        return alarmMinutes > currentMinutes; // ⏱️ upcoming only
       })
       .sort((a, b) => {
         const aMin = timeToMinutes(a.time);
@@ -62,7 +65,7 @@ export const getTodayUpcomingAlarms = async (req, res) => {
         isCustom: alarm.isCustom,
         medicines: alarm.medicineIds.map(med => ({
           id: med._id,
-          name: med.name,          // ✅ populated
+          name: med.name,
           type: med.type,
           doseCount: med.doseCount,
           isCritical: med.isCritical,
@@ -71,13 +74,13 @@ export const getTodayUpcomingAlarms = async (req, res) => {
       }));
 
     // -------------------------
-    // Response
+    // Response (UNCHANGED STRUCTURE)
     // -------------------------
-    console.log("✅ Fetched upcoming alarms for today");
+    console.log("✅ Fetched upcoming alarms for today", upcomingAlarms);
     
     res.json({
       success: true,
-      date: now.toISOString().split("T")[0],
+      date: today,
       currentTime: now.toTimeString().slice(0,5),
       count: upcomingAlarms.length,
       alarms: upcomingAlarms

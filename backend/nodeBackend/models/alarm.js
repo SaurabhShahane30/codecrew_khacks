@@ -9,10 +9,8 @@ const AlarmSchema = new mongoose.Schema(
     },
 
     alarmCode: {
-      type: Number,
+      type: Number, // 1–6 = meal based or custom hashed code
       required: true,
-      // 1–6 = meal based
-      // or custom hashed code
     },
 
     time: {
@@ -29,6 +27,12 @@ const AlarmSchema = new mongoose.Schema(
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Medicine",
+      },
+    ],
+
+    dates: [
+      {
+        type: String, // "YYYY-MM-DD"
       },
     ],
   },

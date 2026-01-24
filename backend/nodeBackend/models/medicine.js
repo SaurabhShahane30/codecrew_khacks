@@ -35,17 +35,13 @@ const MedicineSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Only used when frequency = "Specific Days"
     days: [
       {
         type: String,
         enum: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
       },
     ],
-
-    startDay: {
-      type: String,
-      enum: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    },
 
     durationDays: {
       type: Number,

@@ -92,7 +92,7 @@ export const signin = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: patient._id, phone: patient.phone },
+      { id: patient._id, phone: patient.phone, name: patient.name },
       process.env.JWT_SECRET,
       { expiresIn: "5h" }
     );

@@ -81,6 +81,61 @@ function convert24hTo12h(time24) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} ${meridian}`;
 }
 
+function formatDate(date) {
+  return date.toISOString().split("T")[0];
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function generateDailyDates(startDate, durationDays) {
+  const dates = [];
+  for (let i = 0; i < durationDays; i++) {
+    dates.push(formatDate(addDays(startDate, i)));
+  }
+  return dates;
+}
+
+function generateAlternateDates(startDate, durationDays) {
+  const dates = [];
+  let currentDate = new Date(startDate);
+  let takeToday = true;
+
+  for (let i = 0; i < durationDays; i++) {
+    if (takeToday) {
+      dates.push(formatDate(currentDate));
+    }
+
+    // toggle
+    takeToday = !takeToday;
+
+    // move one day forward
+    currentDate = addDays(currentDate, 1);
+  }
+
+  return dates;
+}
+
+function generateSpecificDayDates(startDate, durationDays, allowedDays) {
+  const dates = [];
+  let current = new Date(startDate);
+
+  const dayMap = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  for (let i = 0; i < durationDays; i++) {
+    const day = dayMap[current.getDay()];
+    if (allowedDays.includes(day)) {
+      dates.push(formatDate(current));
+    }
+    current = addDays(current, 1);
+  }
+
+  return dates;
+}
+
 const attachAlarmsToMedicine = async ({
   patientId,
   medicine,
@@ -91,6 +146,25 @@ const attachAlarmsToMedicine = async ({
 
   const patient = await Patient.findById(patientId);
   if (!patient) throw new Error("Patient not found");
+
+  const startDate = new Date(); // ✅ ALWAYS TODAY
+  let dates = [];
+
+  if (medicine.frequency === "Daily") {
+    dates = generateDailyDates(startDate, medicine.durationDays);
+  }
+
+  if (medicine.frequency === "Alternate Days") {
+    dates = generateAlternateDates(startDate, medicine.durationDays);
+  }
+
+  if (medicine.frequency === "Specific Days") {
+    dates = generateSpecificDayDates(
+      startDate,
+      medicine.durationDays,
+      medicine.days
+    );
+  }
 
   // ---- Standard meal alarms ----
   for (const code of alarmCodes) {
@@ -104,6 +178,7 @@ const attachAlarmsToMedicine = async ({
           alarmCode: code,
           isCustom: false,
           time: resolvedTime,
+          dates,
         },
         $addToSet: {
           medicineIds: medicine._id,
@@ -130,6 +205,7 @@ const attachAlarmsToMedicine = async ({
             alarmCode: customCode,
             time: time12h,
             isCustom: true,
+            dates,
           },
           $addToSet: {
             medicineIds: medicine._id,
@@ -243,79 +319,45 @@ export const addMedicine = async (req, res) => {
 };
 
 /**
- * GET /api/medicine/today
+ * GET /api/medicine/fetch
  */
 export const fetchTodaysMedicines = async (req, res) => {
   try {
     const patientId = req.user.id;
-    console.log("🚀 Fetching Today's medicines for ", patientId);
-    
-    // -------------------------
-    // Date helpers
-    // -------------------------
-    const today = new Date();
 
-    const dayMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const todayDay = dayMap[today.getDay()]; // e.g. "Thu"
+    // 📥 Date from query
+    const date = req.query.date;
 
-    const startOfToday = new Date(today);
-    startOfToday.setHours(0, 0, 0, 0);
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: "date query param required (YYYY-MM-DD)",
+      });
+    }
 
-    // -------------------------
-    // Fetch all medicines of patient
-    // -------------------------
-    const medicines = await Medicine.find({ patientId });
+    console.log(`🚀 Fetching ${patientId}'s medicines for ${date}`);
 
-    const todayMedicines = medicines.filter((med) => {
-      // -------------------------
-      // Duration check
-      // -------------------------
-      const createdAt = new Date(med.createdAt);
-      const diffDays = Math.floor(
-        (startOfToday - new Date(createdAt.setHours(0,0,0,0))) / (1000 * 60 * 60 * 24)
-      );
+    const alarms = await Alarm.find({
+      patientId,
+      dates: date, // 🔥 direct date match
+    }).populate("medicineIds");
 
-      if (diffDays >= med.durationDays) return false;
+    const medicines = alarms.flatMap(a => a.medicineIds);
 
-      // -------------------------
-      // Frequency logic
-      // -------------------------
-      if (med.frequency === "Daily") {
-        return true;
-      }
+    console.log("Fetched medicines:", medicines);
 
-      if (med.frequency === "Specific Days") {
-        return med.days.includes(todayDay);
-      }
-
-      if (med.frequency === "Alternate Days") {
-        // Alternate based on startDay
-        const startIndex = dayMap.indexOf(med.startDay);
-        const todayIndex = today.getDay();
-
-        const delta =
-          Math.abs(todayIndex - startIndex) % 2;
-
-        return delta === 0;
-      }
-
-      return false;
-    });
-    
     res.json({
       success: true,
-      date: today.toISOString().split("T")[0],
-      day: todayDay,
-      count: todayMedicines.length,
-      medicines: todayMedicines,
+      date,
+      count: medicines.length,
+      medicines,
     });
 
   } catch (error) {
-    console.error("Fetch today medicines error:", error);
+    console.error("❌ Fetch medicines error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch today's medicines",
-      error: error.message,
+      message: "Failed to fetch medicines for selected date",
     });
   }
 };
