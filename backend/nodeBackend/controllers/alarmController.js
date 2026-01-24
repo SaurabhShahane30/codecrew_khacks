@@ -22,6 +22,7 @@ function timeToMinutes(timeStr) {
 export const getTodayUpcomingAlarms = async (req, res) => {
   try {
     const patientId = req.user.id;
+    console.log("🚀 Fetch Today's Upcoming Alarms for", patientId);
 
     const now = new Date();
 
@@ -72,7 +73,7 @@ export const getTodayUpcomingAlarms = async (req, res) => {
     // -------------------------
     // Response
     // -------------------------
-    console.log("Response", upcomingAlarms);
+    console.log("✅ Fetched upcoming alarms for today");
     
     res.json({
       success: true,

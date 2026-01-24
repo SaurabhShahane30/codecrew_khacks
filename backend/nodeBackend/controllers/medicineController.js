@@ -70,6 +70,17 @@ function minutesToHHMM(minutes) {
   return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")} ${meridian}`;
 }
 
+function convert24hTo12h(time24) {
+  // "18:30" → "06:30 PM"
+  let [h, m] = time24.split(":").map(Number);
+
+  const meridian = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} ${meridian}`;
+}
+
 const attachAlarmsToMedicine = async ({
   patientId,
   medicine,
@@ -105,7 +116,11 @@ const attachAlarmsToMedicine = async ({
   // ---- Custom alarms ----
   if (customTimes?.length > 0) {
     for (const time of customTimes) {
-      const customCode = timeToDeterministicInt32(time);
+      const time12h = time.includes("AM") || time.includes("PM")
+      ? time
+      : convert24hTo12h(time);
+
+      const customCode = timeToDeterministicInt32(time12h);
 
       await Alarm.findOneAndUpdate(
         { patientId, alarmCode: customCode },
@@ -113,7 +128,7 @@ const attachAlarmsToMedicine = async ({
           $setOnInsert: {
             patientId,
             alarmCode: customCode,
-            time,
+            time: time12h,
             isCustom: true,
           },
           $addToSet: {
@@ -138,7 +153,7 @@ const attachAlarmsToMedicine = async ({
 export const addMedicine = async (req, res) => {
   try {
     const patientId = req.user.id;
-    console.log("🚀 Backend Hit", patientId);
+    console.log("🚀 Add Medicine Backend Hit", patientId);
 
     const {
       name,
