@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:khacks_app/Patient/LoginPage.dart';
 import 'package:khacks_app/core/app_card.dart';
 
+import 'CareTaker/caregiver_login_screen.dart';
+import 'Doctor/doctor_login_screen.dart';
+
 
 class RoleSelectionScreen extends StatelessWidget {
   const RoleSelectionScreen({super.key});
@@ -18,7 +21,10 @@ class RoleSelectionScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
             const SizedBox(height: 32),
 
-
+            roleCard(context, "Doctor", Icons.local_hospital,
+                const DoctorLoginScreen()),
+            roleCard(context, "Caregiver", Icons.volunteer_activism,
+                const CaregiverLoginScreen()),
             roleCard(
                 context, "Patient", Icons.person, LoginScreen()),
           ],
