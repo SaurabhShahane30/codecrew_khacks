@@ -23,7 +23,7 @@ const patientSchema = new mongoose.Schema(
     },
 
     phone: { 
-      type: Number, 
+      type: String, 
       required: true, 
       unique: true 
     },
@@ -33,15 +33,9 @@ const patientSchema = new mongoose.Schema(
       required: true 
     },
 
-    indepentent: { 
+    independent: { 
       type: Boolean, 
       default: true 
-    },
-
-    streak: { 
-      type: Number,
-      required: false,
-      default: 0
     },
 
     mealTimes: {
