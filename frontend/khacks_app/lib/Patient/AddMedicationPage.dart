@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 
+import '../services/alarm_service.dart';
+
 /// =======================
 /// BACKEND SERVICE
 /// =======================
@@ -349,18 +351,25 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   Future<void> pickCustomTime({int? editIndex}) async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: editIndex != null ? customTimes[editIndex] : TimeOfDay.now(),
+      initialTime: editIndex != null
+          ? customTimes[editIndex]
+          : TimeOfDay.now(),
       builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: lavender,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Color(0xFF2D3142),
-            ),
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            alwaysUse24HourFormat: false, // 👈 FORCE 12-HOUR FORMAT
           ),
-          child: child!,
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: lavender,
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Color(0xFF2D3142),
+              ),
+            ),
+            child: child!,
+          ),
         );
       },
     );
@@ -375,6 +384,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       });
     }
   }
+
 
   List<String> getAlternateDays(String startDay) {
     int startIndex = days.indexOf(startDay);
@@ -413,17 +423,27 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
     try {
       await MedicationService.addMedication(medicationData);
+      // 🔔 FETCH + SCHEDULE ALARMS
+      await AlarmService.syncAndScheduleAlarms();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Medication saved successfully!"),
+          content: Text("Medication & alarms scheduled"),
           backgroundColor: Color(0xFF4CAF50),
         ),
       );
 
       Navigator.pop(context);
-    } catch (e) {
-      showError("Failed to save medication");
+    } catch (e, stackTrace) {
+      debugPrint("❌ SAVE MEDICATION ERROR: $e");
+      debugPrint("📌 STACK TRACE: $stackTrace");
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to save medication: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
