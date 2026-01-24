@@ -6,6 +6,9 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
   FlutterLocalNotificationsPlugin();
 
+  // ✅ NEW: Callback for when user taps notification
+  static Function(String?)? onNotificationTap;
+
   static Future<void> init() async {
     debugPrint('🔧 Initializing NotificationService...');
 
@@ -15,7 +18,16 @@ class NotificationService {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: androidInit);
 
-    await _notifications.initialize(settings);
+    // ✅ NEW: Handle notification tap
+    await _notifications.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        debugPrint('🔔 Notification tapped! Payload: ${response.payload}');
+        if (onNotificationTap != null) {
+          onNotificationTap!(response.payload);
+        }
+      },
+    );
 
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'med_alarm_channel',
@@ -42,7 +54,6 @@ class NotificationService {
     final FlutterLocalNotificationsPlugin notifications =
     FlutterLocalNotificationsPlugin();
 
-    // Re-create channel with sound in background isolate
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'med_alarm_channel',
       'Medication Alarms',
@@ -74,7 +85,7 @@ class NotificationService {
           playSound: true,
           enableVibration: true,
           enableLights: true,
-          audioAttributesUsage: AudioAttributesUsage.alarm, // ✅ This is important!
+          audioAttributesUsage: AudioAttributesUsage.alarm,
         ),
       ),
     );
@@ -82,7 +93,6 @@ class NotificationService {
     debugPrint("✅ Background notification displayed!");
   }
 
-  // Schedule alarm for specific time
   static Future<void> scheduleAlarm(DateTime scheduledTime, String medicineName) async {
     final int alarmId = scheduledTime.millisecondsSinceEpoch ~/ 1000;
 
@@ -101,40 +111,37 @@ class NotificationService {
     debugPrint("✅ Alarm scheduled successfully!");
   }
 
-  // For immediate testing
   static Future<void> scheduleTestAlarm({int seconds = 10}) async {
     final DateTime testTime = DateTime.now().add(Duration(seconds: seconds));
     await scheduleAlarm(testTime, "Test Medicine");
     debugPrint("🧪 Test alarm will fire in $seconds seconds at $testTime");
   }
 
-  // Cancel a specific alarm
   static Future<void> cancelAlarm(int alarmId) async {
     await AndroidAlarmManager.cancel(alarmId);
     debugPrint("❌ Alarm $alarmId cancelled");
   }
 
-  // Show immediate notification (for testing when app is open)
-  static Future<void> showMedicationAlarm(String medicineName) async {
-    debugPrint("🔔 Showing immediate alarm for: $medicineName");
+  // ✅ MODIFIED: Now includes alarmCode in payload
+  static Future<void> showMedicationAlarm(String medicineName, {int? alarmCode}) async {
+    debugPrint("🔔 Showing immediate alarm for: $medicineName (Code: $alarmCode)");
 
     await _notifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       '💊 Medication Reminder',
       'Time to take: $medicineName',
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
-            'med_alarm_channel',
-            'Medication Alarms',
-            importance: Importance.max,
-            priority: Priority.high,
-            fullScreenIntent: true,
-            category: AndroidNotificationCategory.alarm,
-            sound: RawResourceAndroidNotificationSound('alarm')
-          // playSound: true,
-          // enableVibration: true,
+          'med_alarm_channel',
+          'Medication Alarms',
+          importance: Importance.max,
+          priority: Priority.high,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.alarm,
+          sound: RawResourceAndroidNotificationSound('alarm'),
         ),
       ),
+      payload: alarmCode?.toString(), // ✅ Pass alarmCode as payload
     );
 
     debugPrint("✅ Notification shown for $medicineName");

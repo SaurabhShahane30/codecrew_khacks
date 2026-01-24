@@ -6,9 +6,8 @@ import 'package:khacks_app/Patient/AddMedicationPage.dart';
 import 'package:khacks_app/Patient/BuyMedication.dart' hide AddMedicationScreen;
 import 'package:khacks_app/Patient/ProfilePage.dart';
 import 'package:khacks_app/Patient/multiple_medicines.dart';
+import './notification_history_page.dart'; // ✅ ADD THIS
 import 'package:table_calendar/table_calendar.dart';
-
-
 
 class HomePage extends StatefulWidget {
   @override
@@ -49,9 +48,6 @@ class _HomePageState extends State<HomePage> {
     _medicineFuture = _fetchMedications();
   }
 
-  /// ===========================
-  /// FETCH MEDICINES (FINAL FIX)
-  /// ===========================
   Future<List<Map<String, dynamic>>> _fetchMedications() async {
     try {
       final storage = FlutterSecureStorage();
@@ -76,7 +72,6 @@ class _HomePageState extends State<HomePage> {
       ][_selectedDay.weekday - 1];
 
       return medicines.where((medicine) {
-        /// ---- CREATED AT FIX (Mongo $date safe) ----
         final createdAtRaw = medicine["createdAt"];
         DateTime rawCreatedAt;
 
@@ -88,7 +83,6 @@ class _HomePageState extends State<HomePage> {
         } else {
           return false;
         }
-
 
         final createdAt = DateTime(
           rawCreatedAt.year,
@@ -107,7 +101,6 @@ class _HomePageState extends State<HomePage> {
         final List days = medicine["days"] ?? [];
         final isValidDay = days.contains(selectedWeekday);
 
-        /// ---- FINAL RULE ----
         if (medicine["frequency"] == "Specific Days") {
           return isWithinRange && isValidDay;
         } else {
@@ -160,6 +153,7 @@ class _HomePageState extends State<HomePage> {
       },
     );
   }
+
   Widget _optionTile({
     required IconData icon,
     required String title,
@@ -179,7 +173,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _goToAddMedication() async {
-    Navigator.pop(context); // close bottom sheet
+    Navigator.pop(context);
 
     await Navigator.push(
       context,
@@ -246,17 +240,17 @@ class _HomePageState extends State<HomePage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Text(
-                  //   Text.getString(context),
-                  //   style: const TextStyle(
-                  //     fontSize: 28,
-                  //     fontWeight: FontWeight.w700,
-                  //     color: Color(0xFF2D3142),
-                  //   ),
-                  // ),
+                  const Text(
+                    "Hello",
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF2D3142),
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
-                    "Let’s take care of your health 💊",
+                    "Let's take care of your health 💊",
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey.shade600,
@@ -264,13 +258,30 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
+              // ✅ NOTIFICATION BELL ICON
+              Container(
+                decoration: BoxDecoration(
+                  color: lavender.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.notifications_outlined, color: lavender, size: 28),
+                  tooltip: 'Notification History',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationHistoryPage(),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
 
-
           const SizedBox(height: 20),
 
-          /// Calendar
           TableCalendar(
             firstDay: DateTime.utc(2024, 1, 1),
             lastDay: DateTime.utc(2030, 12, 31),
