@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:khacks_app/services/auth_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -10,7 +11,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-
   TimeOfDay breakfastTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay lunchTime = const TimeOfDay(hour: 14, minute: 0);
   TimeOfDay dinnerTime = const TimeOfDay(hour: 21, minute: 0);
@@ -77,7 +77,7 @@ class _ProfilePageState extends State<ProfilePage> {
     hour = hour % 12;
     if (hour == 0) hour = 12;
 
-    final hh = hour.toString().padLeft(2, '0');   // 👈 leading zero
+    final hh = hour.toString().padLeft(2, '0');
     final mm = minute.toString().padLeft(2, '0');
     final period = isPM ? "PM" : "AM";
 
@@ -97,46 +97,121 @@ class _ProfilePageState extends State<ProfilePage> {
     ];
 
     try {
+      final token = await AuthService.getToken();
+
       final response = await http.put(
         Uri.parse("http://10.21.9.41:5000/api/patient/updateTimes"),
-        headers: {"Content-Type": "application/json"},
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
         body: jsonEncode({"mealTimes": mealTimes}),
       );
 
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Meal times updated")),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Meal times updated")),
+          );
+        }
       } else {
         throw Exception("Update failed");
       }
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Server error")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Server error")),
+        );
+      }
     }
 
     setState(() => isLoading = false);
+  }
+
+  /// ---------------------------
+  /// SIGN OUT
+  /// ---------------------------
+  Future<void> _handleSignOut() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign Out'),
+        content: const Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      // Clear auth data
+      await AuthService.logout();
+
+      if (mounted) {
+        // Navigate to role selection and remove all previous routes
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/role-selection',
+              (route) => false,
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Signed out successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Meal Timings"),
+        title: const Text("Profile"),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Sign Out',
+            onPressed: _handleSignOut,
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Meal Timings Section
+            const Text(
+              'Meal Timings',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+
             _tile("Breakfast Time", breakfastTime,
                     () => _pickTime(breakfastTime, (t) => breakfastTime = t)),
             _tile("Lunch Time", lunchTime,
                     () => _pickTime(lunchTime, (t) => lunchTime = t)),
             _tile("Dinner Time", dinnerTime,
                     () => _pickTime(dinnerTime, (t) => dinnerTime = t)),
+
             const SizedBox(height: 30),
+
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -147,6 +222,80 @@ class _ProfilePageState extends State<ProfilePage> {
                     : const Text("Save Meal Times"),
               ),
             ),
+
+            const Spacer(),
+
+            // Sign Out Button
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _handleSignOut,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.logout,
+                            color: Colors.red,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Sign Out',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF2D3142),
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Log out from your account',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -158,7 +307,7 @@ class _ProfilePageState extends State<ProfilePage> {
       child: ListTile(
         title: Text(title),
         trailing: Text(
-          _formatStrict12h(time), // 👈 02:00 PM, 09:00 AM
+          _formatStrict12h(time),
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         onTap: onTap,

@@ -4,8 +4,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:intl/intl.dart';
-import 'notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'notification_service.dart';
 
 // 🔔 CRITICAL: Global callback - runs in separate isolate
 @pragma('vm:entry-point')
@@ -15,10 +16,48 @@ void alarmCallback(int alarmId) async {
   final prefs = await SharedPreferences.getInstance();
   final medicineName = prefs.getString('alarm_$alarmId') ?? 'Your medication';
 
-  await NotificationService.init();
-  await NotificationService.showMedicationAlarm(medicineName);
+  // ✅ Re-initialize notification service in isolate
+  final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
 
-  debugPrint("✅ Alarm notification triggered for: $medicineName");
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'med_alarm_channel',
+    'Medication Alarms',
+    importance: Importance.max,
+    sound: RawResourceAndroidNotificationSound('alarm'),
+    playSound: true,
+    enableVibration: true,
+    enableLights: true,
+  );
+
+  await notifications
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+
+  // ✅ CRITICAL: Pass alarmId as payload string
+  await notifications.show(
+    alarmId,
+    '💊 Medication Reminder',
+    'Time to take: $medicineName',
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        'med_alarm_channel',
+        'Medication Alarms',
+        channelDescription: 'Medication reminder notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
+        sound: RawResourceAndroidNotificationSound('alarm'),
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+    ),
+    payload: alarmId.toString(), // ✅ THIS IS THE KEY FIX!
+  );
+
+  debugPrint("✅ Alarm notification triggered for: $medicineName (ID: $alarmId)");
 }
 
 // 🌙 MIDNIGHT SYNC CALLBACK - Runs every day at 00:00
@@ -26,30 +65,24 @@ void alarmCallback(int alarmId) async {
 void midnightSyncCallback() async {
   debugPrint("🌙 MIDNIGHT SYNC TRIGGERED at ${DateTime.now()}");
 
-
-  // Perform the sync
   await AlarmService.syncAndScheduleAlarms();
 
   debugPrint("✅ Midnight sync completed");
 }
 
 class AlarmService {
-  static const int MIDNIGHT_SYNC_ID = 999998; // Reserved ID for midnight sync
-  static const String BASE_URL = 'http://10.21.9.41:5000';
+  static const int MIDNIGHT_SYNC_ID = 999998;
+  static const String BASE_URL = 'http://192.168.1.181:5000';
 
-  /// Initialize midnight sync - call this once during app startup
   static Future<void> initializeMidnightSync() async {
     debugPrint("🌙 Setting up midnight sync...");
 
-
-    // Calculate next midnight
     final now = DateTime.now();
     final nextMidnight = DateTime(now.year, now.month, now.day)
         .add(const Duration(days: 1));
 
     debugPrint("📅 Next midnight sync scheduled for: $nextMidnight");
 
-    // Schedule periodic midnight sync
     final success = await AndroidAlarmManager.periodic(
       const Duration(days: 1),
       MIDNIGHT_SYNC_ID,
@@ -67,21 +100,16 @@ class AlarmService {
     }
   }
 
-  /// Main sync function - fetches alarms and schedules them
   static Future<void> syncAndScheduleAlarms() async {
-
-
     try {
-      // Step 1: Clear all existing alarms
       await clearAllLocalAlarms();
 
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      // Step 2: Fetch fresh alarms from backend
       final response = await http.get(
-          Uri.parse('$BASE_URL/api/alarm/upcoming'),
-          headers: {"Authorization": "Bearer $token",}
+        Uri.parse('$BASE_URL/api/alarm/upcoming'),
+        headers: {"Authorization": "Bearer $token"},
       );
 
       if (response.statusCode != 200) {
@@ -100,7 +128,6 @@ class AlarmService {
       final List alarms = responseData['alarms'];
       debugPrint('📋 Found ${alarms.length} alarms to schedule');
 
-      // Step 3: Schedule all new alarms
       final prefs = await SharedPreferences.getInstance();
       int scheduledCount = 0;
 
@@ -111,7 +138,6 @@ class AlarmService {
             continue;
           }
 
-          // Extract medicine names
           final List<String> medicineNames = [];
           if (alarm['medicines'] != null && alarm['medicines'] is List) {
             for (final medicine in alarm['medicines']) {
@@ -133,10 +159,7 @@ class AlarmService {
           final String timeStr = alarm['time'].toString();
           final String medicinesDisplay = medicineNames.join(', ');
 
-          // Store medicine name for callback
           await prefs.setString('alarm_$alarmCode', medicinesDisplay);
-
-          // Track this alarm ID
           await _trackAlarmId(alarmCode);
 
           debugPrint('⏰ Scheduling: Code=$alarmCode, Time=$timeStr, Meds=$medicinesDisplay');
@@ -158,7 +181,6 @@ class AlarmService {
     }
   }
 
-  /// Schedule a single alarm
   static Future<void> scheduleAlarm(int alarmCode, String timeStr) async {
     try {
       final parsed = DateFormat('h:mm a').parse(timeStr.trim());
@@ -172,7 +194,6 @@ class AlarmService {
         parsed.minute,
       );
 
-      // If time already passed today, schedule for tomorrow
       if (alarmTime.isBefore(now)) {
         alarmTime = alarmTime.add(const Duration(days: 1));
       }
@@ -199,7 +220,6 @@ class AlarmService {
     }
   }
 
-  /// Clear all local alarms
   static Future<void> clearAllLocalAlarms() async {
     debugPrint('🗑️ Clearing all local alarms...');
 
@@ -210,22 +230,17 @@ class AlarmService {
       try {
         final alarmCode = int.parse(idStr);
         await AndroidAlarmManager.cancel(alarmCode);
-
-        // Also remove medicine name from storage
         await prefs.remove('alarm_$alarmCode');
-
         debugPrint('✅ Cancelled alarm: $alarmCode');
       } catch (e) {
         debugPrint('❌ Error cancelling alarm $idStr: $e');
       }
     }
 
-    // Clear the tracking list
     await prefs.setStringList('tracked_alarm_ids', []);
     debugPrint('✅ All local alarms cleared');
   }
 
-  /// Track alarm IDs so we can cancel them later
   static Future<void> _trackAlarmId(int alarmCode) async {
     final prefs = await SharedPreferences.getInstance();
     final tracked = prefs.getStringList('tracked_alarm_ids') ?? [];
@@ -236,20 +251,13 @@ class AlarmService {
     }
   }
 
-  /// Called when user adds a new medicine
   static Future<void> onMedicineAdded() async {
     debugPrint('💊 New medicine added - triggering immediate sync...');
-
-    // Wait a moment for backend to process
     await Future.delayed(const Duration(milliseconds: 500));
-
-    // Sync alarms (this will clear old ones and add new ones)
     await syncAndScheduleAlarms();
-
     debugPrint('✅ Medicine addition sync completed');
   }
 
-  /// Test alarm (for debugging)
   static Future<void> testAlarm() async {
     debugPrint('🧪 Setting test alarm for 5 seconds from now');
 
@@ -272,11 +280,9 @@ class AlarmService {
     }
   }
 
-  /// Cancel a specific alarm
   static Future<void> cancelAlarm(int alarmCode) async {
     await AndroidAlarmManager.cancel(alarmCode);
 
-    // Remove from tracking
     final prefs = await SharedPreferences.getInstance();
     final tracked = prefs.getStringList('tracked_alarm_ids') ?? [];
     tracked.remove(alarmCode.toString());

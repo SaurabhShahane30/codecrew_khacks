@@ -6,6 +6,7 @@ import 'package:khacks_app/core/app_button.dart';
 import 'package:khacks_app/core/input_field.dart';
 import '../core/app_button.dart';
 import '../core/input_field.dart';
+import '../services/auth_service.dart';
 import './SignUppage.dart';
 import './HomePage.dart';
 
@@ -67,7 +68,16 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = jsonDecode(response.body);
         final token = data['token'];
 
-        await storage.write(key: 'token', value: token); // flutter_secure_storage
+        // Extract userId from various possible field names
+        final dynamic userIdValue = data['userId'] ?? data['id'] ?? data['patientId'];
+        final String? userId = userIdValue?.toString();
+
+        // ✅ Save authentication data using AuthService
+        await AuthService.saveAuth(
+          token: token,
+          role: 'patient',
+          userId: userId,
+        );
 
         if (response.statusCode == 200) {
           Navigator.pushReplacement(
