@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:khacks_app/Patient/AddMedicationPage.dart';
-import 'package:khacks_app/Patient/BuyMedication.dart' hide AddMedicationScreen;
 import 'package:khacks_app/Patient/ProfilePage.dart';
 import 'package:khacks_app/Patient/multiple_medicines.dart';
 import 'package:table_calendar/table_calendar.dart';
+
 
 import '../services/auth_service.dart';
 
@@ -139,7 +138,7 @@ class _HomePageState extends State<HomePage> {
               _optionTile(
                 icon: Icons.picture_as_pdf,
                 title: "Upload Prescription PDF",
-                onTap: () => _goToAddMedication(),
+                onTap: () => _goToMultipleAddMedication(),
               ),
               _optionTile(
                 icon: Icons.edit,
@@ -168,6 +167,19 @@ class _HomePageState extends State<HomePage> {
       ),
       onTap: onTap,
     );
+  }
+
+  void _goToMultipleAddMedication() async {
+    Navigator.pop(context); // close bottom sheet
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => MultipleMedicinesScreen()),
+    );
+
+    setState(() {
+      _medicineFuture = _fetchMedications();
+    });
   }
 
   void _goToAddMedication() async {
