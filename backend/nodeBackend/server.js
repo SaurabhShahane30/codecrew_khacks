@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 
 import patientRoutes from "./routes/patientRoutes.js";
 import caretakerRoutes from "./routes/caretakerRoutes.js";
-// import doctorRoutes from "./routes/doctorRoutes.js";
+import doctorRoutes from "./routes/doctorRoutes.js";
 
 import medicineRoutes from "./routes/medicineRoutes.js";
 import alarmRoutes from "./routes/alarmRoutes.js";
@@ -22,7 +22,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 app.use("/api/patient", patientRoutes);
 app.use("/api/caretaker", caretakerRoutes);
-// app.use("/api/doctor", doctorRoutes);
+app.use("/api/doctor", doctorRoutes);
 
 app.use("/api/medicine", medicineRoutes);
 app.use("/api/alarm", alarmRoutes);

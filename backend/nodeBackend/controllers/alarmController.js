@@ -65,7 +65,7 @@ export const getTodayUpcomingAlarms = async (req, res) => {
       .filter(Boolean)
       .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
 
-    console.log("✅ Upcoming alarms fetched:", upcomingAlarms);
+    console.log("✅ Upcoming alarms fetched:");
 
     res.json({
       success: true,
@@ -87,7 +87,7 @@ export const getTodayUpcomingAlarms = async (req, res) => {
 
 export const getAlarmDetailsById = async (req, res) => {
   try {
-    const { id: alarmId } = req.query;
+    const { alarmId } = req.query;
 
     console.log("🚀 Fetching alarm details for ID:", alarmId);
 
@@ -97,8 +97,6 @@ export const getAlarmDetailsById = async (req, res) => {
         message: "alarmId query param is required",
       });
     }
-
-    console.log("🚀 Fetching alarm medicines details:", alarmId);
 
     const alarm = await Alarm.findOne({
       _id: alarmId
@@ -118,7 +116,7 @@ export const getAlarmDetailsById = async (req, res) => {
       const med = m.medicineId;
 
       return {
-        id: med._id,
+        _id: med._id,  // ✅ Changed from 'id' to '_id'
         name: med.name,
         type: med.type,
         frequency: med.frequency,
@@ -129,23 +127,13 @@ export const getAlarmDetailsById = async (req, res) => {
         delayed: med.delayed,
         isCritical: med.isCritical,
         photoUrl: med.photoUrl,
-        scheduleDates: m.dates,   // ✅ per-medicine dates
+        scheduleDates: m.dates,
         createdAt: med.createdAt,
         updatedAt: med.updatedAt
       };
     });
 
-    const response = {
-        alarmId: alarm._id,
-        alarmCode: alarm.alarmCode,
-        time: alarm.time,
-        isCustom: alarm.isCustom,
-        createdAt: alarm.createdAt,
-        updatedAt: alarm.updatedAt,
-        medicines
-      } 
-
-    console.log("✅ Alarm Medicines fetched:", response);
+    console.log("✅ Alarm Medicines fetched");
 
     res.json({
       success: true,
@@ -172,10 +160,11 @@ export const getAlarmDetailsById = async (req, res) => {
 
 export const markAlarmTaken = async (req, res) => {
   try {
-    const { alarmId } = req.body;
+    const { alarmId, medicines, timestamp } = req.body;
 
-    console.log("🚀 Marking alarm as taken:", alarmId);
+    console.log("🚀 Marking medicines as taken:", { alarmId, medicines });
 
+    // ✅ Validate inputs
     if (!alarmId) {
       return res.status(400).json({
         success: false,
@@ -183,6 +172,14 @@ export const markAlarmTaken = async (req, res) => {
       });
     }
 
+    if (!medicines || !Array.isArray(medicines) || medicines.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "medicines array is required and must not be empty",
+      });
+    }
+
+    // ✅ Verify alarm exists
     const alarm = await Alarm.findOne({ _id: alarmId });
 
     if (!alarm) {
@@ -192,27 +189,79 @@ export const markAlarmTaken = async (req, res) => {
       });
     }
 
-    const medicineIds = alarm.medicines.map(m => m.medicineId);
-
-    await Medicine.updateMany(
-      { _id: { $in: medicineIds } },
+    // ✅ Only update the medicines that were actually taken
+    const result = await Medicine.updateMany(
+      { _id: { $in: medicines } },
       { $inc: { taken: 1 } }
     );
 
-    console.log("✅ Medicines marked as taken for alarm:");
+    console.log(`✅ ${result.modifiedCount} medicines marked as taken`);
 
     res.json({
       success: true,
       message: "Medicines marked as taken",
       alarmId,
-      count: medicineIds.length
+      count: result.modifiedCount,
+      timestamp: timestamp || new Date().toISOString()
     });
 
   } catch (error) {
     console.error("❌ Mark taken error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to mark alarm as taken",
+      message: "Failed to mark medicines as taken",
+      error: error.message
+    });
+  }
+};
+
+export const snoozeAlarm = async (req, res) => {
+  try {
+    const { alarmId, timestamp } = req.body;
+
+    console.log("🚀 Snoozing alarm:", alarmId);
+
+    if (!alarmId) {
+      return res.status(400).json({
+        success: false,
+        message: "alarmId is required",
+      });
+    }
+
+    // ✅ Verify alarm exists
+    const alarm = await Alarm.findOne({ _id: alarmId });
+
+    if (!alarm) {
+      return res.status(404).json({
+        success: false,
+        message: "Alarm not found",
+      });
+    }
+
+    // ✅ Get all medicine IDs from this alarm
+    const medicineIds = alarm.medicines.map(m => m.medicineId);
+
+    // ✅ Increment delayed counter for all medicines in this alarm
+    await Medicine.updateMany(
+      { _id: { $in: medicineIds } },
+      { $inc: { delayed: 1 } }
+    );
+
+    console.log(`✅ Alarm snoozed: ${alarmId}`);
+
+    res.json({
+      success: true,
+      message: "Alarm snoozed for 10 minutes",
+      alarmId,
+      snoozeUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
+      timestamp: timestamp || new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ Snooze alarm error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to snooze alarm",
       error: error.message
     });
   }
@@ -242,18 +291,18 @@ export const markAlarmMissed = async (req, res) => {
 
     const medicineIds = alarm.medicines.map(m => m.medicineId);
 
-    await Medicine.updateMany(
+    const result = await Medicine.updateMany(
       { _id: { $in: medicineIds } },
       { $inc: { missed: 1 } }
     );
 
-    console.log("✅ Medicines marked as missed for alarm:");
+    console.log(`✅ ${result.modifiedCount} medicines marked as missed`);
 
     res.json({
       success: true,
       message: "Medicines marked as missed",
       alarmId,
-      count: medicineIds.length
+      count: result.modifiedCount
     });
 
   } catch (error) {
@@ -290,18 +339,18 @@ export const markAlarmDelayed = async (req, res) => {
 
     const medicineIds = alarm.medicines.map(m => m.medicineId);
 
-    await Medicine.updateMany(
+    const result = await Medicine.updateMany(
       { _id: { $in: medicineIds } },
       { $inc: { delayed: 1 } }
     );
 
-    console.log("✅ Medicines marked as delayed for alarm:", alarmId);
+    console.log(`✅ ${result.modifiedCount} medicines marked as delayed`);
 
     res.json({
       success: true,
       message: "Medicines marked as delayed",
       alarmId,
-      count: medicineIds.length
+      count: result.modifiedCount
     });
 
   } catch (error) {

@@ -286,7 +286,7 @@ export const addMedicine = async (req, res) => {
       durationDays,
       photoUrl
     });
-    console.log("✅ Medicine created:", medicine);
+    console.log("✅ Medicine created", medicine._id);
 
     // -------------------------
     // 2. Create / Attach Alarms
