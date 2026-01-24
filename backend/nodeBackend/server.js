@@ -2,6 +2,10 @@ import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 
+import Patient from "./models/patient.js";
+
+import patientRoutes from "./routes/patientRoutes.js";
+
 dotenv.config();
 const app = express();
 
