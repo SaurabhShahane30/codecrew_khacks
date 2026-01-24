@@ -132,6 +132,65 @@ class _HomePageState extends State<HomePage> {
     setState(() => _selectedIndex = index);
   }
 
+  void _showAddMedicationOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(35),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _optionTile(
+                icon: Icons.picture_as_pdf,
+                title: "Upload Prescription PDF",
+                onTap: () => _goToAddMedication(),
+              ),
+              _optionTile(
+                icon: Icons.edit,
+                title: "Add medicine via Voice",
+                onTap: () => _goToAddMedication(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+  Widget _optionTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: lavender.withOpacity(0.2),
+        child: Icon(icon, color: lavender),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  void _goToAddMedication() async {
+    Navigator.pop(context); // close bottom sheet
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => AddMedicationScreen()),
+    );
+
+    setState(() {
+      _medicineFuture = _fetchMedications();
+    });
+  }
+
   Widget _getPageContent() {
     if (_selectedIndex == 0) return _buildHomeContent();
     if (_selectedIndex == 1) return AddMedicationScreen();
@@ -205,37 +264,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-
-              /// 👉 Right-side icons
-              Row(
-                children: [
-                  /// Prescription PDF Button
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => MultipleMedicinesScreen(),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: lavender.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.picture_as_pdf_outlined,
-                        color: lavender,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 10),
-
-                ],
-              ),
             ],
           ),
 
@@ -296,18 +324,10 @@ class _HomePageState extends State<HomePage> {
       body: _getPageContent(),
       floatingActionButton: FloatingActionButton(
         backgroundColor: lavender,
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => AddMedicationScreen()),
-          );
-          setState(() {
-            _medicineFuture = _fetchMedications();
-          });
-        },
+        onPressed: _showAddMedicationOptions,
         child: const Icon(Icons.add),
       ),
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         selectedItemColor: lavender,
