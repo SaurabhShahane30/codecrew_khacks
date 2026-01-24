@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 
 import '../services/alarm_service.dart';
+import '../services/auth_service.dart';
 
 /// =======================
 /// BACKEND SERVICE
@@ -42,8 +43,8 @@ class MedicationService {
 
   static Future<void> addMedication(Map<String, dynamic> medicationData) async {
     try {
-      final storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'token');
+      final token = await AuthService.getToken();
+
 
       final response = await http.post(
         Uri.parse('$MAIN_BACKEND/api/medicine/add'),
@@ -120,9 +121,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   };
   List<TimeOfDay> customTimes = [];
   String frequency = "Daily";
-  final List<String> days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  List<String> selectedDays = [];
-  String startDay = "Mon";
   int doseCount = 1;
   bool isCritical = false;
 
@@ -213,11 +211,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       return false;
     }
 
-    if (frequency == "Specific Days" && selectedDays.isEmpty) {
-      showError("Please select at least one day");
-      return false;
-    }
-
     final duration = int.tryParse(durationController.text);
     if (duration == null || duration <= 0) {
       showError("Duration must be greater than 0 days");
@@ -294,7 +287,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         medicineType = result['type'] ?? 'tablet';
         doseCount = result['doseCount'] ?? (medicineType == 'syrup' ? 5 : 1);
         frequency = result['frequency'] ?? 'Daily';
-        startDay = result['startDay'] ?? 'Mon';
         isCritical = result['isCritical'] ?? false;
         durationController.text = (result['durationDays'] ?? 7).toString();
 
@@ -323,9 +315,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             debugPrint("Error parsing time: $e");
           }
         }
-
-        final daysList = result['days'] as List? ?? [];
-        selectedDays = daysList.map((d) => d.toString()).toList();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -357,7 +346,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       builder: (context, child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(
-            alwaysUse24HourFormat: false, // 👈 FORCE 12-HOUR FORMAT
+            alwaysUse24HourFormat: false,
           ),
           child: Theme(
             data: Theme.of(context).copyWith(
@@ -385,16 +374,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     }
   }
 
-
-  List<String> getAlternateDays(String startDay) {
-    int startIndex = days.indexOf(startDay);
-    List<String> result = [];
-    for (int i = startIndex; i < days.length; i += 2) {
-      result.add(days[i]);
-    }
-    return result;
-  }
-
   void saveMedication() async {
     if (!validateForm()) return;
 
@@ -406,24 +385,15 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       "intakeTimes": intakeTimes,
       "customTimes": customTimes.map((t) => t.format(context)).toList(),
       "frequency": frequency,
-      "startDay": startDay,
-      "days": frequency == "Daily"
-          ? days
-          : frequency == "Alternate Days"
-          ? getAlternateDays(startDay)
-          : selectedDays.isNotEmpty
-          ? selectedDays
-          : days,
       "doseCount": doseCount,
       "isCritical": isCritical,
       "durationDays": int.parse(durationController.text),
-      "photoUrl": _medicinePhotoUrl, // Add photo URL to medication data
+      "photoUrl": _medicinePhotoUrl,
       "createdAt": DateTime.now().toIso8601String(),
     };
 
     try {
       await MedicationService.addMedication(medicationData);
-      // 🔔 FETCH + SCHEDULE ALARMS
       await AlarmService.syncAndScheduleAlarms();
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -445,28 +415,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         ),
       );
     }
-  }
-
-  Widget buildStartDaySelector() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: DropdownButtonFormField<String>(
-        value: startDay,
-        decoration: const InputDecoration(
-          labelText: "Start Day",
-          labelStyle: TextStyle(color: lavender, fontWeight: FontWeight.w500),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
-        items: days.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-        onChanged: (v) => setState(() => startDay = v!),
-        dropdownColor: Colors.white,
-      ),
-    );
   }
 
   Widget buildMealSection(String title) {
@@ -720,7 +668,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// VOICE INPUT BUTTON (keeping existing code)
+            /// VOICE INPUT BUTTON
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -784,11 +732,9 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             const Divider(thickness: 1, color: Color(0xFFE0E0E0)),
             const SizedBox(height: 24),
 
-            /// MEDICINE PHOTO SECTION - NEW
+            /// MEDICINE PHOTO SECTION
             _buildPhotoSection(),
             const SizedBox(height: 28),
-
-            // Continue from where the code left off - inside the Column widget children list
 
             /// Name Section
             const Text(
@@ -997,56 +943,13 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   prefixIcon: const Icon(Icons.repeat, color: lavender),
                 ),
-                items: ["Daily", "Alternate Days", "Specific Days"]
+                items: ["Daily", "Alternate Days"]
                     .map((f) => DropdownMenuItem(value: f, child: Text(f)))
                     .toList(),
                 onChanged: (v) => setState(() => frequency = v!),
                 dropdownColor: Colors.white,
               ),
             ),
-
-            const SizedBox(height: 16),
-
-            if (frequency == "Daily") buildStartDaySelector(),
-
-            if (frequency == "Alternate Days") buildStartDaySelector(),
-
-            if (frequency == "Specific Days")
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE0E0E0)),
-                ),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: days.map((d) {
-                    final selected = selectedDays.contains(d);
-                    return FilterChip(
-                      label: Text(
-                        d,
-                        style: TextStyle(
-                          color: selected ? Colors.white : const Color(0xFF2D3142),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      selected: selected,
-                      onSelected: (v) => setState(() {
-                        v ? selectedDays.add(d) : selectedDays.remove(d);
-                      }),
-                      selectedColor: lavender,
-                      checkmarkColor: Colors.white,
-                      backgroundColor: const Color(0xFFF8F9FA),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(color: selected ? lavender : const Color(0xFFE0E0E0)),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
 
             const SizedBox(height: 28),
 

@@ -6,8 +6,11 @@ import 'package:khacks_app/Patient/AddMedicationPage.dart';
 import 'package:khacks_app/Patient/BuyMedication.dart' hide AddMedicationScreen;
 import 'package:khacks_app/Patient/ProfilePage.dart';
 import 'package:khacks_app/Patient/multiple_medicines.dart';
-import './notification_history_page.dart'; // ✅ ADD THIS
 import 'package:table_calendar/table_calendar.dart';
+
+import '../services/auth_service.dart';
+
+
 
 class HomePage extends StatefulWidget {
   @override
@@ -48,18 +51,19 @@ class _HomePageState extends State<HomePage> {
     _medicineFuture = _fetchMedications();
   }
 
+  /// ===========================
+  /// FETCH MEDICINES (FINAL FIX)
+  /// ===========================
   Future<List<Map<String, dynamic>>> _fetchMedications() async {
     try {
-      final storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'token');
+      final token = await AuthService.getToken();
 
-      final response = await http.get(
-        Uri.parse("http://10.21.9.41:5000/api/medicine/fetch"),
-        headers: {"Authorization": "Bearer $token"},
-      );
+      debugPrint("TOKEN: $token");
 
-      final decoded = jsonDecode(response.body);
-      final List medicines = decoded["medicines"] ?? [];
+      if (token == null || token.isEmpty) {
+        debugPrint("❌ No token found. User not logged in.");
+        return [];
+      }
 
       final selectedDate = DateTime(
         _selectedDay.year,
@@ -67,46 +71,40 @@ class _HomePageState extends State<HomePage> {
         _selectedDay.day,
       );
 
-      final selectedWeekday = [
-        "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"
-      ][_selectedDay.weekday - 1];
+      final formattedDate =
+          "${selectedDate.year.toString().padLeft(4, '0')}-"
+          "${selectedDate.month.toString().padLeft(2, '0')}-"
+          "${selectedDate.day.toString().padLeft(2, '0')}";
 
-      return medicines.where((medicine) {
-        final createdAtRaw = medicine["createdAt"];
-        DateTime rawCreatedAt;
+      final uri = Uri.parse("http://10.21.9.41:5000/api/medicine/fetch")
+          .replace(queryParameters: {
+        "date": formattedDate,
+      });
 
-        if (createdAtRaw is String) {
-          rawCreatedAt = DateTime.parse(createdAtRaw).toLocal();
-        } else if (createdAtRaw is Map && createdAtRaw.containsKey("\$date")) {
-          rawCreatedAt =
-              DateTime.parse(createdAtRaw["\$date"]).toLocal();
-        } else {
-          return false;
-        }
+      debugPrint("REQUEST URL: $uri");
 
-        final createdAt = DateTime(
-          rawCreatedAt.year,
-          rawCreatedAt.month,
-          rawCreatedAt.day,
-        );
+      final response = await http.get(
+        uri,
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      );
 
-        final durationDays = medicine["durationDays"] ?? 1;
-        final endDate =
-        createdAt.add(Duration(days: durationDays - 1));
+      debugPrint("STATUS CODE: ${response.statusCode}");
+      debugPrint("RAW BODY: ${response.body}");
 
-        final isWithinRange =
-            !selectedDate.isBefore(createdAt) &&
-                !selectedDate.isAfter(endDate);
+      if (response.statusCode != 200 || response.body.isEmpty) {
+        debugPrint("❌ Invalid or empty response");
+        return [];
+      }
 
-        final List days = medicine["days"] ?? [];
-        final isValidDay = days.contains(selectedWeekday);
+      final decoded = jsonDecode(response.body);
+      debugPrint("DECODED JSON: $decoded");
 
-        if (medicine["frequency"] == "Specific Days") {
-          return isWithinRange && isValidDay;
-        } else {
-          return isWithinRange;
-        }
-      }).map<Map<String, dynamic>>((medicine) {
+      final List medicines = decoded["medicines"] ?? [];
+
+      return medicines.map<Map<String, dynamic>>((medicine) {
         final List<int> alarmKeys =
             (medicine["alarmKeys"] as List?)?.cast<int>() ?? [];
 
@@ -115,6 +113,7 @@ class _HomePageState extends State<HomePage> {
           "alarms": alarmKeys.map(alarmKeyToLabel).toList(),
         };
       }).toList();
+
     } catch (e) {
       debugPrint("❌ Error fetching medicines: $e");
       return [];
@@ -153,7 +152,6 @@ class _HomePageState extends State<HomePage> {
       },
     );
   }
-
   Widget _optionTile({
     required IconData icon,
     required String title,
@@ -173,7 +171,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _goToAddMedication() async {
-    Navigator.pop(context);
+    Navigator.pop(context); // close bottom sheet
 
     await Navigator.push(
       context,
@@ -240,17 +238,17 @@ class _HomePageState extends State<HomePage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Hello",
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF2D3142),
-                    ),
-                  ),
+                  // Text(
+                  //   Text.getString(context),
+                  //   style: const TextStyle(
+                  //     fontSize: 28,
+                  //     fontWeight: FontWeight.w700,
+                  //     color: Color(0xFF2D3142),
+                  //   ),
+                  // ),
                   const SizedBox(height: 4),
                   Text(
-                    "Let's take care of your health 💊",
+                    "Let’s take care of your health 💊",
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey.shade600,
@@ -258,30 +256,13 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-              // ✅ NOTIFICATION BELL ICON
-              Container(
-                decoration: BoxDecoration(
-                  color: lavender.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.notifications_outlined, color: lavender, size: 28),
-                  tooltip: 'Notification History',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const NotificationHistoryPage(),
-                      ),
-                    );
-                  },
-                ),
-              ),
             ],
           ),
 
+
           const SizedBox(height: 20),
 
+          /// Calendar
           TableCalendar(
             firstDay: DateTime.utc(2024, 1, 1),
             lastDay: DateTime.utc(2030, 12, 31),
