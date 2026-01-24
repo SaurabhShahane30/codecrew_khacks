@@ -8,6 +8,7 @@ import caretakerRoutes from "./routes/caretakerRoutes.js";
 
 import medicineRoutes from "./routes/medicineRoutes.js";
 import alarmRoutes from "./routes/alarmRoutes.js";
+// import reportRoutes from "./routes/reportRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -25,5 +26,6 @@ app.use("/api/caretaker", caretakerRoutes);
 
 app.use("/api/medicine", medicineRoutes);
 app.use("/api/alarm", alarmRoutes);
+// app.use("/api/report", reportRoutes);
 
 app.listen(5000, () => console.log("🚀 Server running on port 5000"));

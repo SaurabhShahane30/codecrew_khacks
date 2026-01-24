@@ -107,7 +107,7 @@ export const signin = async (req, res) => {
 
 export const fetchCaretakerInfo = async (req, res) => {
   try {
-    const { caretakerId } = req.params;
+    const caretakerId = req.user.id;
 
     const caretaker = await Caretaker.findById(caretakerId)
       .populate({

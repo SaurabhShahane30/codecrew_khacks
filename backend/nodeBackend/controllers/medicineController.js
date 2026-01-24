@@ -82,8 +82,12 @@ function convert24hTo12h(time24) {
 }
 
 function formatDate(date) {
-  return date.toISOString().split("T")[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
+
 
 function addDays(date, days) {
   const d = new Date(date);
@@ -317,7 +321,7 @@ export const addMedicine = async (req, res) => {
 /**
  * GET /api/medicine/fetch
  */
-export const fetchTodaysMedicines = async (req, res) => {
+export const fetchMedicinesByDay = async (req, res) => {
   try {
     const patientId = req.user.id;
 
