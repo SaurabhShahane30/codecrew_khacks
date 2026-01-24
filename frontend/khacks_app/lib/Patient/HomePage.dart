@@ -8,6 +8,8 @@ import 'package:khacks_app/Patient/ProfilePage.dart';
 import 'package:khacks_app/Patient/multiple_medicines.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import '../services/auth_service.dart';
+
 
 
 class HomePage extends StatefulWidget {
@@ -54,8 +56,14 @@ class _HomePageState extends State<HomePage> {
   /// ===========================
   Future<List<Map<String, dynamic>>> _fetchMedications() async {
     try {
-      final storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'token');
+      final token = await AuthService.getToken();
+
+      debugPrint("TOKEN: $token");
+
+      if (token == null || token.isEmpty) {
+        debugPrint("❌ No token found. User not logged in.");
+        return [];
+      }
 
       final selectedDate = DateTime(
         _selectedDay.year,
@@ -63,7 +71,8 @@ class _HomePageState extends State<HomePage> {
         _selectedDay.day,
       );
 
-      final formattedDate = "${selectedDate.year.toString().padLeft(4, '0')}-"
+      final formattedDate =
+          "${selectedDate.year.toString().padLeft(4, '0')}-"
           "${selectedDate.month.toString().padLeft(2, '0')}-"
           "${selectedDate.day.toString().padLeft(2, '0')}";
 
@@ -72,14 +81,27 @@ class _HomePageState extends State<HomePage> {
         "date": formattedDate,
       });
 
+      debugPrint("REQUEST URL: $uri");
+
       final response = await http.get(
         uri,
         headers: {
           "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
         },
       );
 
+      debugPrint("STATUS CODE: ${response.statusCode}");
+      debugPrint("RAW BODY: ${response.body}");
+
+      if (response.statusCode != 200 || response.body.isEmpty) {
+        debugPrint("❌ Invalid or empty response");
+        return [];
+      }
+
       final decoded = jsonDecode(response.body);
+      debugPrint("DECODED JSON: $decoded");
+
       final List medicines = decoded["medicines"] ?? [];
 
       return medicines.map<Map<String, dynamic>>((medicine) {
@@ -97,6 +119,7 @@ class _HomePageState extends State<HomePage> {
       return [];
     }
   }
+
   void _onNavItemTapped(int index) {
     setState(() => _selectedIndex = index);
   }

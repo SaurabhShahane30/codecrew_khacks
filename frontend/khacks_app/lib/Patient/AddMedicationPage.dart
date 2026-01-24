@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 
 import '../services/alarm_service.dart';
+import '../services/auth_service.dart';
 
 /// =======================
 /// BACKEND SERVICE
@@ -42,8 +43,8 @@ class MedicationService {
 
   static Future<void> addMedication(Map<String, dynamic> medicationData) async {
     try {
-      final storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'token');
+      final token = await AuthService.getToken();
+
 
       final response = await http.post(
         Uri.parse('$MAIN_BACKEND/api/medicine/add'),

@@ -117,15 +117,15 @@ class AlarmService {
         return;
       }
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      debugPrint('📦 API Response: Success=${responseData['success']}, Count=${responseData['count']}');
+      final dynamic responseData = jsonDecode(response.body);
 
-      if (responseData['alarms'] == null || responseData['alarms'] is! List) {
-        debugPrint('❌ No alarms array found in response');
+      // ✅ NEW: response is a LIST, not a MAP
+      if (responseData is! List) {
+        debugPrint('❌ Expected a list of alarms but got something else');
         return;
       }
 
-      final List alarms = responseData['alarms'];
+      final List alarms = responseData;
       debugPrint('📋 Found ${alarms.length} alarms to schedule');
 
       final prefs = await SharedPreferences.getInstance();
@@ -138,8 +138,9 @@ class AlarmService {
             continue;
           }
 
+          // ✅ NEW medicines parsing
           final List<String> medicineNames = [];
-          if (alarm['medicines'] != null && alarm['medicines'] is List) {
+          if (alarm['medicines'] is List) {
             for (final medicine in alarm['medicines']) {
               if (medicine is Map && medicine['name'] != null) {
                 medicineNames.add(medicine['name'].toString());
@@ -148,7 +149,7 @@ class AlarmService {
           }
 
           if (medicineNames.isEmpty) {
-            debugPrint('⚠️ Skipping alarm ${alarm['alarmCode']} - no medicines');
+            debugPrint('⚠️ Skipping alarm ${alarm['alarmCode']} - no medicines for today');
             continue;
           }
 
@@ -162,7 +163,9 @@ class AlarmService {
           await prefs.setString('alarm_$alarmCode', medicinesDisplay);
           await _trackAlarmId(alarmCode);
 
-          debugPrint('⏰ Scheduling: Code=$alarmCode, Time=$timeStr, Meds=$medicinesDisplay');
+          debugPrint(
+            '⏰ Scheduling: Code=$alarmCode, Time=$timeStr, Meds=$medicinesDisplay',
+          );
 
           await scheduleAlarm(alarmCode, timeStr);
           scheduledCount++;
