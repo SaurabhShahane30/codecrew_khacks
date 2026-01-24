@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import '../services/auth_service.dart';
 import 'medication_popup_dialog.dart';
 
 class NotificationHistoryPage extends StatefulWidget {
@@ -30,8 +31,7 @@ class _NotificationHistoryPageState extends State<NotificationHistoryPage> {
     setState(() => _isLoading = true);
 
     try {
-      final storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'token');
+      final token = await AuthService.getToken();
 
       final response = await http.get(
         Uri.parse('$BASE_URL/api/alarm/history'),

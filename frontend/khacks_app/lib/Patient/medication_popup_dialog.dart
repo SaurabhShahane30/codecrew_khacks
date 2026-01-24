@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import '../services/auth_service.dart';
+
 class MedicationPopupDialog extends StatefulWidget {
   final int alarmCode;
 
@@ -40,8 +42,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
     });
 
     try {
-      final storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'token');
+      final token = await AuthService.getToken();
 
       // ✅ Try to fetch from backend first
       final response = await http.get(
@@ -122,8 +123,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
 
     // ✅ Otherwise, try backend
     try {
-      final storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'token');
+      final token = await AuthService.getToken();
 
       final response = await http.post(
         Uri.parse('$BASE_URL/api/alarm/taken'),
@@ -181,8 +181,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
 
     // ✅ Otherwise, try backend
     try {
-      final storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'token');
+      final token = await AuthService.getToken();
 
       final response = await http.post(
         Uri.parse('$BASE_URL/api/alarm/snooze'),

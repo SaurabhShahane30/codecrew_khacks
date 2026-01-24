@@ -3,7 +3,7 @@ import 'package:khacks_app/Patient/LoginPage.dart';
 import 'package:khacks_app/core/app_card.dart';
 
 import 'CareTaker/caregiver_login_screen.dart';
-import 'Doctor/doctor_login_screen.dart';
+import 'Doctor/doctor_signup_screen.dart';
 
 
 class RoleSelectionScreen extends StatelessWidget {
@@ -22,7 +22,7 @@ class RoleSelectionScreen extends StatelessWidget {
             const SizedBox(height: 32),
 
             roleCard(context, "Doctor", Icons.local_hospital,
-                const DoctorLoginScreen()),
+                const DoctorSignupScreen()),
             roleCard(context, "Caregiver", Icons.volunteer_activism,
                 const CaregiverLoginScreen()),
             roleCard(
