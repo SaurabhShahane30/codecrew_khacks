@@ -23,13 +23,13 @@ void main() async {
     debugPrint('🔔 Notification tapped with payload: $payload');
 
     if (payload != null && payload.isNotEmpty) {
-      final alarmCode = int.tryParse(payload);
+      final String alarmId = payload;
 
-      if (alarmCode != null) {
+      if (alarmId != null) {
         // Show popup dialog
         navigatorKey.currentState?.push(
           MaterialPageRoute(
-            builder: (context) => MedicationPopupDialog(alarmCode: alarmCode),
+            builder: (context) => MedicationPopupDialog(alarmId: alarmId),
             fullscreenDialog: true,
           ),
         );
@@ -96,7 +96,7 @@ class _MyAppState extends State<MyApp> {
           : RoleSelectionScreen(),
       routes: {
         '/home': (_) => HomePage(),
-        '/history': (_) => const NotificationHistoryPage(),
+        // '/history': (_) => const NotificationHistoryPage(),
         '/role-selection': (_) => RoleSelectionScreen(),
       },
     );
