@@ -1,9 +1,9 @@
-// import express from "express";
-// import { getTodayUpcomingAlarms } from "../controllers/alarmController.js";
-// import { authMiddleware } from "../controllers/patientController.js";
+import express from "express";
+import { getTodayUpcomingAlarms } from "../controllers/alarmController.js";
+import { authMiddleware } from "../controllers/patientController.js";
 
-// const router = express.Router();
+const router = express.Router();
 
-// router.get("/upcoming", authMiddleware, getTodayUpcomingAlarms);
+router.get("/upcoming", authMiddleware, getTodayUpcomingAlarms);
 
-// export default router;
+export default router;
