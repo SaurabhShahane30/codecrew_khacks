@@ -1,16 +1,86 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:khacks_app/core/app_theme.dart';
 import './doctor_overview_screen.dart';
 
-class DoctorHomeScreen extends StatelessWidget {
+class DoctorHomeScreen extends StatefulWidget {
   const DoctorHomeScreen({super.key});
+
+  @override
+  State<DoctorHomeScreen> createState() => _DoctorHomeScreenState();
+}
+
+class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
+  bool isLoading = true;
+  String doctorName = "";
+  List patients = [];
+  List filteredPatients = [];
+
+  final TextEditingController searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchDoctorData();
+    searchController.addListener(_filterPatients);
+  }
+
+  Future<void> fetchDoctorData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("doctorToken");
+
+      final response = await http.get(
+        Uri.parse("http://10.21.9.41:5000/api/doctor"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data["success"] == true) {
+        setState(() {
+          doctorName = data["doctor"]["name"];
+          patients = data["patients"];
+          filteredPatients = patients;
+          isLoading = false;
+        });
+      } else {
+        throw Exception("Failed to load doctor data");
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to fetch data")),
+      );
+      setState(() => isLoading = false);
+    }
+  }
+
+  void _filterPatients() {
+    final query = searchController.text.toLowerCase();
+
+    setState(() {
+      filteredPatients = patients.where((patient) {
+        return patient["name"]
+            .toString()
+            .toLowerCase()
+            .contains(query);
+      }).toList();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
-
-      body: Column(
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
         children: [
           // 🔵 Header
           Container(
@@ -25,9 +95,9 @@ class DoctorHomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Hello Doctor!",
-                  style: TextStyle(
+                Text(
+                  "Hello $doctorName!",
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -40,6 +110,7 @@ class DoctorHomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 TextField(
+                  controller: searchController,
                   decoration: InputDecoration(
                     hintText: "Search patients...",
                     prefixIcon: const Icon(Icons.search),
@@ -62,18 +133,21 @@ class DoctorHomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Showing 6 patients"),
+                  Text("Showing ${filteredPatients.length} patients"),
                   const SizedBox(height: 12),
 
                   Expanded(
-                    child: ListView(
-                      children: const [
-                        PatientCard(name: "Patient P1", risk: "Low"),
-                        PatientCard(name: "Patient P2", risk: "Medium"),
-                        PatientCard(name: "Patient P3", risk: "High"),
-                        PatientCard(name: "Patient P4", risk: "Low"),
-                        PatientCard(name: "Patient P5", risk: "Medium"),
-                      ],
+                    child: ListView.builder(
+                      itemCount: filteredPatients.length,
+                      itemBuilder: (context, index) {
+                        final patient = filteredPatients[index];
+
+                        return PatientCard(
+                          name: patient["name"],
+                          risk: "Low", // placeholder (logic later)
+                          patientId: patient["_id"],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -89,8 +163,14 @@ class DoctorHomeScreen extends StatelessWidget {
 class PatientCard extends StatelessWidget {
   final String name;
   final String risk;
+  final String patientId;
 
-  const PatientCard({super.key, required this.name, required this.risk});
+  const PatientCard({
+    super.key,
+    required this.name,
+    required this.risk,
+    required this.patientId,
+  });
 
   Color get riskColor {
     switch (risk) {
@@ -131,7 +211,10 @@ class PatientCard extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const PatientOverviewScreen(),
+                builder: (_) => PatientOverviewScreen(
+                  patientId: patientId,
+                  patientName: name,
+                ),
               ),
             );
           },

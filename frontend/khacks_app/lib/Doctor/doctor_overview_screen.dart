@@ -2,17 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:khacks_app/core/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class PatientOverviewScreen extends StatelessWidget {
-  const PatientOverviewScreen({super.key});
+class PatientOverviewScreen extends StatefulWidget {
+  final String patientId;
+  final String patientName;
 
+  const PatientOverviewScreen({
+    super.key,
+    required this.patientId,
+    required this.patientName,
+  });
+
+  @override
+  State<PatientOverviewScreen> createState() => _PatientOverviewScreenState();
+}
+
+class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
   /// 🔗 Opens the detailed report website in Chrome
   Future<void> _openDetailedReport() async {
-    final Uri url = Uri.parse("http://10.21.11.24:5173/");
-    // ↑ Replace with your laptop IP + port
+    final Uri url = Uri.parse(
+      "http://10.21.11.24:5173/?patientId=${widget.patientId}",
+    );
+    // 👆 Web dashboard reads patientId from query param
 
     if (!await launchUrl(
       url,
-      mode: LaunchMode.externalApplication, // forces Chrome
+      mode: LaunchMode.externalApplication,
     )) {
       throw Exception('Could not open detailed report');
     }
@@ -24,7 +38,7 @@ class PatientOverviewScreen extends StatelessWidget {
       backgroundColor: Colors.white,
 
       appBar: AppBar(
-        title: const Text("Patient Overview"),
+        title: Text(widget.patientName),
         backgroundColor: AppTheme.lavender,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -66,9 +80,7 @@ class PatientOverviewScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              onPressed: () {
-                _openDetailedReport();
-              },
+              onPressed: _openDetailedReport,
               child: const Text("View Detailed Report"),
             ),
 
@@ -111,7 +123,6 @@ class PatientOverviewScreen extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 40,
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
               ),
             ),
             Text(
