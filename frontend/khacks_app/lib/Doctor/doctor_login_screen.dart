@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/input_field.dart';
 import '../core/app_button.dart';
+import '../services/auth_service.dart';
 import './doctor_home_screen.dart';
 
 class DoctorLoginScreen extends StatefulWidget {
@@ -34,6 +35,18 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
       );
 
       final data = jsonDecode(response.body);
+      final token = data['token'];
+
+      // Extract userId from various possible field names
+      final dynamic userIdValue = data['userId'] ?? data['id'] ?? data['patientId'];
+      final String? userId = userIdValue?.toString();
+
+      // ✅ Save authentication data using AuthService
+      await AuthService.saveAuth(
+        token: token,
+        role: 'doctor',
+        userId: userId,
+      );
 
       if (response.statusCode == 200) {
         final prefs = await SharedPreferences.getInstance();

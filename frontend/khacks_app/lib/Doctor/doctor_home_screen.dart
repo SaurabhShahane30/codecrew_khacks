@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:khacks_app/core/app_theme.dart';
+import '../services/auth_service.dart';
+import '../core/app_card.dart';
 import './doctor_overview_screen.dart';
 
 class DoctorHomeScreen extends StatefulWidget {
@@ -14,197 +14,169 @@ class DoctorHomeScreen extends StatefulWidget {
 }
 
 class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
-  bool isLoading = true;
-  String doctorName = "";
-  List patients = [];
-  List filteredPatients = [];
+  // ===== STATE =====
+  bool loading = true;
+
+  String doctorName = "Doctor";
+  List<dynamic> patients = [];
+  List<dynamic> filteredPatients = [];
 
   final TextEditingController searchController = TextEditingController();
+
+  final String baseUrl = "http://10.21.9.41:5000";
 
   @override
   void initState() {
     super.initState();
-    fetchDoctorData();
+    fetchDoctorInfo();
     searchController.addListener(_filterPatients);
   }
 
-  Future<void> fetchDoctorData() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString("doctorToken");
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
 
-      final response = await http.get(
-        Uri.parse("http://10.21.9.41:5000/api/doctor"),
+  // ==============================
+  // 👨‍⚕️ FETCH DOCTOR + PATIENTS
+  // ==============================
+  Future<void> fetchDoctorInfo() async {
+    try {
+      final token = await AuthService.getToken();
+
+      final res = await http.get(
+        Uri.parse("$baseUrl/api/doctor"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
         },
       );
 
-      final data = jsonDecode(response.body);
+      final data = json.decode(res.body);
 
-      if (response.statusCode == 200 && data["success"] == true) {
+      if (res.statusCode == 200 && data["success"] == true) {
         setState(() {
           doctorName = data["doctor"]["name"];
           patients = data["patients"];
           filteredPatients = patients;
-          isLoading = false;
+          loading = false;
         });
       } else {
-        throw Exception("Failed to load doctor data");
+        loading = false;
+        debugPrint("Doctor fetch failed: ${data["message"]}");
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to fetch data")),
-      );
-      setState(() => isLoading = false);
+      loading = false;
+      debugPrint("Doctor API error: $e");
     }
+
+    setState(() {});
   }
 
+  // ==============================
+  // 🔍 FILTER PATIENTS
+  // ==============================
   void _filterPatients() {
     final query = searchController.text.toLowerCase();
 
     setState(() {
-      filteredPatients = patients.where((patient) {
-        return patient["name"]
-            .toString()
-            .toLowerCase()
-            .contains(query);
+      filteredPatients = patients.where((p) {
+        return p["name"].toString().toLowerCase().contains(query);
       }).toList();
     });
   }
 
+  // ==============================
+  // 🧱 UI
+  // ==============================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      body: isLoading
+      appBar: AppBar(title: const Text("Doctor Dashboard")),
+      body: loading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          // 🔵 Header
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: AppTheme.lavender,
-              borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(24),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Hello $doctorName!",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  "Monitor patient compliance",
-                  style: TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: searchController,
-                  decoration: InputDecoration(
-                    hintText: "Search patients...",
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-              ],
+          // ===== HEADER =====
+          Text(
+            "Hello, Dr. $doctorName 👋",
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
             ),
           ),
+          const SizedBox(height: 8),
+          const Text(
+            "Monitor patient compliance",
+            style: TextStyle(color: Colors.grey),
+          ),
 
-          // 📋 List
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Showing ${filteredPatients.length} patients"),
-                  const SizedBox(height: 12),
+          const SizedBox(height: 24),
 
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: filteredPatients.length,
-                      itemBuilder: (context, index) {
-                        final patient = filteredPatients[index];
-
-                        return PatientCard(
-                          name: patient["name"],
-                          risk: "Low", // placeholder (logic later)
-                          patientId: patient["_id"],
-                        );
-                      },
-                    ),
-                  ),
-                ],
+          // ===== SEARCH =====
+          TextField(
+            controller: searchController,
+            decoration: InputDecoration(
+              hintText: "Search patients...",
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: Colors.grey.shade100,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
               ),
             ),
           ),
+
+          const SizedBox(height: 24),
+
+          // ===== PATIENTS HEADER =====
+          Text(
+            "Patients (${filteredPatients.length})",
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ===== PATIENT LIST =====
+          if (filteredPatients.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(
+                "No patients found",
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            ...filteredPatients.map((p) => patientCard(p)).toList(),
         ],
       ),
     );
   }
-}
 
-class PatientCard extends StatelessWidget {
-  final String name;
-  final String risk;
-  final String patientId;
+  // ==============================
+  // 👤 PATIENT CARD
+  // ==============================
+  Widget patientCard(dynamic patient) {
+    final name = patient["name"];
+    final patientId = patient["_id"];
 
-  const PatientCard({
-    super.key,
-    required this.name,
-    required this.risk,
-    required this.patientId,
-  });
-
-  Color get riskColor {
-    switch (risk) {
-      case "High":
-        return Colors.red;
-      case "Medium":
-        return Colors.orange;
-      default:
-        return Colors.green;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      decoration: appCardDecoration(),
       child: ListTile(
         leading: const CircleAvatar(
           backgroundColor: Color(0xFFE0E7FF),
           child: Icon(Icons.person, color: Color(0xFF2563EB)),
         ),
-        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Container(
-          margin: const EdgeInsets.only(top: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: riskColor.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            "$risk Risk",
-            style: TextStyle(color: riskColor, fontSize: 12),
-          ),
+        title: Text(
+          name,
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         trailing: TextButton(
           onPressed: () {

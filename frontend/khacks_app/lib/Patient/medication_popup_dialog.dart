@@ -55,6 +55,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
       ).timeout(const Duration(seconds: 3));
 
       debugPrint('📥 Alarm details response: ${response.statusCode}');
+      debugPrint('📥 RAW RESPONSE BODY:\n${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -323,6 +324,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
                     final type = medicine['type'] ?? 'tablet';
                     final dose = medicine['doseCount'] ?? 1;
                     final isCritical = medicine['isCritical'] ?? false;
+                    final photoUrl = medicine['photoUrl'];
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -349,23 +351,58 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
                             }
                           });
                         },
-                        title: Row(
+                        title: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
+                            // 🖼️ Medicine Image (FULL WIDTH)
+                            if (photoUrl != null && photoUrl.toString().isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                height: 90,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  color: Colors.grey[100],
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Image.network(
+                                  photoUrl,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const Center(
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    debugPrint('❌ Image load failed: $error');
+                                    return const Center(
+                                      child: Icon(Icons.broken_image, color: Colors.grey),
+                                    );
+                                  },
+                                ),
                               ),
+
+                            // 📛 Name + ⚠️ Critical
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                                if (isCritical)
+                                  const Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
+                              ],
                             ),
-                            if (isCritical) ...[
-                              const SizedBox(width: 8),
-                              const Icon(
-                                Icons.warning_amber_rounded,
-                                color: Colors.red,
-                                size: 18,
-                              ),
-                            ],
                           ],
                         ),
                         subtitle: Text(
