@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 
 import Patient from "../models/patient.js";
 import Caretaker from "../models/caretaker.js";
+import Doctor from "../models/doctor.js";
 
 export const authMiddleware = (req, res, next) => {
   try {
@@ -124,5 +125,88 @@ export const fetchPatientInfo = async (req, res) => {
   } catch (err) {
     console.log("❌ Fetching unsuccessfull");
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const updateMealTimes = async (req, res) => {
+  try {
+    const patientId = req.user.id;
+    const { mealTimes } = req.body;
+    console.log("🚀 Updating meal times for patient", patientId);
+
+    if (!mealTimes || !Array.isArray(mealTimes)) {
+      return res.status(400).json({ message: "Invalid meal times" });
+    }
+
+    const updatedPatient = await Patient.findByIdAndUpdate(
+      patientId,
+      { mealTimes },
+      { new: true }
+    );
+
+    console.log("✅ Meal times updated successfully");
+    res.status(200).json({
+      message: "Meal times updated successfully",
+      mealTimes: updatedPatient.mealTimes,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const addDoctorByCode = async (req, res) => {
+  try {
+    const { referralCode } = req.body;
+
+    // 🔐 Get patientId from JWT (auth middleware)
+    const patientId = req.user.id;
+
+    console.log("🔗 Linking patient to doctor...");
+    console.log("patientId:", patientId);
+    console.log("doctorReferralCode:", referralCode);
+
+    if (!patientId || !referralCode) {
+      return res.status(400).json({
+        message: "patientId and doctorReferralCode are required"
+      });
+    }
+
+    // 🔍 Find doctor by referral code
+    const doctor = await Doctor.findOne({ referralCode: referralCode });
+
+    if (!doctor) {
+      console.log("❌ Doctor not found with referral code:", referralCode);
+      return res.status(404).json({
+        message: "Invalid doctor referral code"
+      });
+    }
+
+    // 🛑 Prevent duplicate linking
+    if (doctor.patients.includes(patientId)) {
+      return res.status(409).json({
+        message: "Patient already linked to this doctor"
+      });
+    }
+
+    // ✅ Link patient
+    doctor.patients.push(patientId);
+    await doctor.save();
+
+    console.log(`✅ Patient ${patientId} linked to Doctor ${doctor.name}`);
+
+    return res.status(200).json({
+      message: "Patient successfully linked to doctor",
+      doctorId: doctor._id,
+      doctorName: doctor.name,
+      patientId
+    });
+
+  } catch (err) {
+    console.error("❌ linkPatientToDoctorByReferral error:", err);
+    return res.status(500).json({
+      message: "Server error while linking patient to doctor",
+      error: err.message
+    });
   }
 };

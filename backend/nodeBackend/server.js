@@ -24,7 +24,7 @@ app.use("/api/patient", patientRoutes);
 app.use("/api/caretaker", caretakerRoutes);
 app.use("/api/doctor", doctorRoutes);
 
-app.use("/api/medicine", medicineRoutes);
+app.use("/api/medicine", medicineRoutes); 
 app.use("/api/alarm", alarmRoutes);
 // app.use("/api/report", reportRoutes);
 
