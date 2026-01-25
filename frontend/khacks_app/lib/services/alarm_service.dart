@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:intl/intl.dart';
@@ -16,6 +15,7 @@ void alarmCallback(int alarmId) async {
 
   final prefs = await SharedPreferences.getInstance();
   final medicineName = prefs.getString('alarm_$alarmId') ?? 'Your medication';
+  final originalId = prefs.getString('alarm_original_$alarmId') ?? '';
 
   final FlutterLocalNotificationsPlugin notifications =
   FlutterLocalNotificationsPlugin();
@@ -55,7 +55,7 @@ void alarmCallback(int alarmId) async {
         audioAttributesUsage: AudioAttributesUsage.alarm,
       ),
     ),
-    payload: alarmId.toString(),
+    payload: originalId,
   );
 
   debugPrint("✅ Alarm notification triggered for: $medicineName");
@@ -114,6 +114,9 @@ class AlarmService {
       )
           .timeout(const Duration(seconds: 10));
 
+      debugPrint('📥 Response status: ${response.statusCode}');
+      debugPrint('📥 Response body: ${response.body}');
+
       if (response.statusCode != 200) {
         debugPrint('❌ Failed to fetch alarms: ${response.statusCode}');
         return;
@@ -123,26 +126,39 @@ class AlarmService {
 
       if (responseData['alarms'] == null ||
           responseData['alarms'] is! List) {
-        debugPrint('❌ No alarms array found');
+        debugPrint('❌ No alarms array found in response');
         return;
       }
 
       final List alarms = responseData['alarms'];
+
       if (alarms.isEmpty) {
         debugPrint('ℹ️ No alarms to schedule');
+        await clearAllLocalAlarms();
         return;
       }
 
-      /// ✅ Clear only AFTER successful fetch
-      await clearAllLocalAlarms();
+      debugPrint('📋 Found ${alarms.length} alarms to process');
 
       final prefs = await SharedPreferences.getInstance();
       int scheduledCount = 0;
+      List<String> validAlarmIds = [];
 
-      for (final alarm in alarms) {
+      for (int i = 0; i < alarms.length; i++) {
+        final alarm = alarms[i];
+
+        debugPrint('🔍 Processing alarm $i: ${alarm.toString()}');
+
+        // ✅ FIX: Backend returns "alarmId" not "_id"
+        final alarmId = alarm['alarmId'] ?? alarm['_id'];
+        final timeStr = alarm['time'];
+
+        if (alarmId == null || timeStr == null) {
+          debugPrint('⚠️ Alarm $i missing alarmId or time, skipping');
+          continue;
+        }
+
         try {
-          if (alarm['alarmCode'] == null || alarm['time'] == null) continue;
-
           final List<String> medicineNames = [];
           if (alarm['medicines'] is List) {
             for (final medicine in alarm['medicines']) {
@@ -152,34 +168,47 @@ class AlarmService {
             }
           }
 
-          if (medicineNames.isEmpty) continue;
+          if (medicineNames.isEmpty) {
+            debugPrint('⚠️ Alarm $i has no valid medicines, skipping');
+            continue;
+          }
 
-          final int alarmCode = alarm['alarmCode'] is int
-              ? alarm['alarmCode']
-              : int.parse(alarm['alarmCode'].toString());
+          // ✅ Use backend's alarmCode if available, otherwise hash alarmId
+          final int alarmCode = alarm['alarmCode'] ?? alarmId.toString().hashCode;
 
-          final String timeStr = alarm['time'].toString();
           final String medicinesDisplay = medicineNames.join(', ');
 
+          debugPrint('💊 Scheduling: $medicinesDisplay at $timeStr');
+          debugPrint('   Alarm ID: $alarmId');
+          debugPrint('   Alarm Code: $alarmCode');
+
+          // ✅ Store both the medicine name and original ID
           await prefs.setString('alarm_$alarmCode', medicinesDisplay);
-          await _trackAlarmId(alarmCode);
+          await prefs.setString('alarm_original_$alarmCode', alarmId.toString());
+
+          validAlarmIds.add(alarmCode.toString());
 
           await scheduleAlarm(alarmCode, timeStr);
           scheduledCount++;
-        } catch (e) {
-          debugPrint('❌ Alarm processing error: $e');
+
+          debugPrint('✅ Successfully scheduled alarm $scheduledCount');
+        } catch (e, stack) {
+          debugPrint('❌ Error processing alarm $i: $e');
+          debugPrint('Stack: $stack');
         }
       }
+
+      await _updateTrackedAlarmIds(validAlarmIds);
 
       debugPrint(
           '✅ Successfully scheduled $scheduledCount/${alarms.length} alarms');
     } catch (e, stackTrace) {
       debugPrint('❌ Alarm sync error: $e');
-      debugPrint('$stackTrace');
+      debugPrint('Stack trace: $stackTrace');
     }
   }
 
-  /// ⏰ Schedule a single alarm
+  /// ⏰ Schedule a single alarm using alarmCode directly
   static Future<void> scheduleAlarm(int alarmCode, String timeStr) async {
     try {
       final parsed = DateFormat('h:mm a').parse(timeStr.trim());
@@ -195,9 +224,10 @@ class AlarmService {
 
       if (alarmTime.isBefore(now)) {
         alarmTime = alarmTime.add(const Duration(days: 1));
+        debugPrint('⏭️ Alarm time in past, scheduling for tomorrow');
       }
 
-      await AndroidAlarmManager.oneShotAt(
+      final success = await AndroidAlarmManager.oneShotAt(
         alarmTime,
         alarmCode,
         alarmCallback,
@@ -206,9 +236,14 @@ class AlarmService {
         rescheduleOnReboot: true,
       );
 
-      debugPrint('✅ Alarm $alarmCode scheduled at $alarmTime');
-    } catch (e) {
-      debugPrint('❌ Alarm schedule error: $e');
+      if (success) {
+        debugPrint('✅ Alarm scheduled at $alarmTime (code: $alarmCode)');
+      } else {
+        debugPrint('❌ Failed to schedule alarm $alarmCode');
+      }
+    } catch (e, stack) {
+      debugPrint('❌ Alarm schedule error for $alarmCode: $e');
+      debugPrint('Stack: $stack');
     }
   }
 
@@ -217,26 +252,45 @@ class AlarmService {
     final prefs = await SharedPreferences.getInstance();
     final trackedIds = prefs.getStringList('tracked_alarm_ids') ?? [];
 
+    debugPrint('🗑️ Clearing ${trackedIds.length} tracked alarms');
+
     for (final idStr in trackedIds) {
       try {
-        final id = int.parse(idStr);
-        await AndroidAlarmManager.cancel(id);
-        await prefs.remove('alarm_$id');
-      } catch (_) {}
+        final int alarmCode = int.parse(idStr);
+        await AndroidAlarmManager.cancel(alarmCode);
+        await prefs.remove('alarm_$alarmCode');
+        await prefs.remove('alarm_original_$alarmCode');
+        debugPrint('🗑️ Cancelled alarm: $alarmCode');
+      } catch (e) {
+        debugPrint('⚠️ Failed to clear alarm $idStr: $e');
+      }
     }
 
     await prefs.setStringList('tracked_alarm_ids', []);
-    debugPrint('🗑️ All local alarms cleared');
+    debugPrint('✅ All local alarms cleared');
   }
 
-  static Future<void> _trackAlarmId(int alarmCode) async {
+  /// ✅ Update tracked alarm IDs
+  static Future<void> _updateTrackedAlarmIds(List<String> newIds) async {
     final prefs = await SharedPreferences.getInstance();
-    final tracked = prefs.getStringList('tracked_alarm_ids') ?? [];
 
-    if (!tracked.contains(alarmCode.toString())) {
-      tracked.add(alarmCode.toString());
-      await prefs.setStringList('tracked_alarm_ids', tracked);
+    final oldIds = prefs.getStringList('tracked_alarm_ids') ?? [];
+    for (final oldId in oldIds) {
+      if (!newIds.contains(oldId)) {
+        try {
+          final int alarmCode = int.parse(oldId);
+          await AndroidAlarmManager.cancel(alarmCode);
+          await prefs.remove('alarm_$alarmCode');
+          await prefs.remove('alarm_original_$alarmCode');
+          debugPrint('🗑️ Removed outdated alarm: $alarmCode');
+        } catch (e) {
+          debugPrint('⚠️ Failed to remove alarm $oldId: $e');
+        }
+      }
     }
+
+    await prefs.setStringList('tracked_alarm_ids', newIds);
+    debugPrint('📝 Updated tracking: ${newIds.length} alarms');
   }
 
   /// 💊 Trigger sync when medicine is added (NON-BLOCKING)
@@ -250,8 +304,9 @@ class AlarmService {
     final testTime = DateTime.now().add(const Duration(seconds: 5));
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('alarm_999999', 'Test Medicine');
+    await prefs.setString('alarm_original_999999', 'test_id_123');
 
-    await AndroidAlarmManager.oneShotAt(
+    final success = await AndroidAlarmManager.oneShotAt(
       testTime,
       999999,
       alarmCallback,
@@ -259,15 +314,6 @@ class AlarmService {
       wakeup: true,
     );
 
-    debugPrint('🧪 Test alarm scheduled');
-  }
-
-  static Future<void> cancelAlarm(int alarmCode) async {
-    await AndroidAlarmManager.cancel(alarmCode);
-
-    final prefs = await SharedPreferences.getInstance();
-    final tracked = prefs.getStringList('tracked_alarm_ids') ?? [];
-    tracked.remove(alarmCode.toString());
-    await prefs.setStringList('tracked_alarm_ids', tracked);
+    debugPrint(success ? '✅ Test alarm scheduled for 5 seconds' : '❌ Test alarm failed');
   }
 }

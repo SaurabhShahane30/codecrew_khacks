@@ -1,16 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../services/auth_service.dart';
 
 class MedicationPopupDialog extends StatefulWidget {
-  final int alarmCode;
+  final String alarmId;
 
   const MedicationPopupDialog({
     Key? key,
-    required this.alarmCode,
+    required this.alarmId,
   }) : super(key: key);
 
   @override
@@ -24,7 +23,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
   bool _isLoading = true;
   String? _error;
   bool _useTestData = true; // ✅ Flag to use test data when backend is unavailable
-
+  late String alarmId;
   String? _alarmTime;
   List<Map<String, dynamic>> _medicines = [];
   Set<String> _takenMedicines = {};
@@ -32,6 +31,8 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
   @override
   void initState() {
     super.initState();
+    alarmId = widget.alarmId;
+    debugPrint("your code is ${alarmId}");
     _fetchAlarmDetails();
   }
 
@@ -44,20 +45,24 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
     try {
       final token = await AuthService.getToken();
 
-      // ✅ Try to fetch from backend first
       final response = await http.get(
-        Uri.parse('$BASE_URL/api/alarm/details/${widget.alarmCode}'),
-        headers: {"Authorization": "Bearer $token"},
-      ).timeout(const Duration(seconds: 3)); // Add timeout
+        Uri.parse('$BASE_URL/api/alarm/details').replace(
+          queryParameters: { 'alarmId': alarmId },
+        ),
+        headers: {
+          "Authorization": "Bearer $token",
+        },
+      ).timeout(const Duration(seconds: 3));
 
       debugPrint('📥 Alarm details response: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final alarm = data['alarm'];  // ✅ Access nested alarm object
 
         setState(() {
-          _alarmTime = data['time'] ?? 'Unknown time';
-          _medicines = List<Map<String, dynamic>>.from(data['medicines'] ?? []);
+          _alarmTime = alarm['time'] ?? 'Unknown time';
+          _medicines = List<Map<String, dynamic>>.from(alarm['medicines'] ?? []);
           _isLoading = false;
           _useTestData = false;
         });
@@ -95,7 +100,6 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
       debugPrint('✅ Loaded ${_medicines.length} TEST medicines');
     }
   }
-
   Future<void> _markAsTaken() async {
     if (_takenMedicines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -132,7 +136,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
           "Content-Type": "application/json",
         },
         body: jsonEncode({
-          'alarmCode': widget.alarmCode,
+          'alarmId': alarmId,
           'medicines': _takenMedicines.toList(),
           'timestamp': DateTime.now().toIso8601String(),
         }),
@@ -190,7 +194,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
           "Content-Type": "application/json",
         },
         body: jsonEncode({
-          'alarmCode': widget.alarmCode,
+          'alarmId': alarmId,
           'timestamp': DateTime.now().toIso8601String(),
         }),
       );

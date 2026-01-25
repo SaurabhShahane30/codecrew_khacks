@@ -110,21 +110,11 @@ class NotificationService {
 
     debugPrint("✅ Alarm scheduled successfully!");
   }
+  
 
-  static Future<void> scheduleTestAlarm({int seconds = 10}) async {
-    final DateTime testTime = DateTime.now().add(Duration(seconds: seconds));
-    await scheduleAlarm(testTime, "Test Medicine");
-    debugPrint("🧪 Test alarm will fire in $seconds seconds at $testTime");
-  }
-
-  static Future<void> cancelAlarm(int alarmId) async {
-    await AndroidAlarmManager.cancel(alarmId);
-    debugPrint("❌ Alarm $alarmId cancelled");
-  }
-
-  // ✅ MODIFIED: Now includes alarmCode in payload
-  static Future<void> showMedicationAlarm(String medicineName, {int? alarmCode}) async {
-    debugPrint("🔔 Showing immediate alarm for: $medicineName (Code: $alarmCode)");
+  // ✅ MODIFIED: Now includes alarmId in payload
+  static Future<void> showMedicationAlarm(String medicineName, {String? alarmId}) async {
+    debugPrint("🔔 Showing immediate alarm for: $medicineName (Code: $alarmId)");
 
     await _notifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -141,7 +131,7 @@ class NotificationService {
           sound: RawResourceAndroidNotificationSound('alarm'),
         ),
       ),
-      payload: alarmCode?.toString(), // ✅ Pass alarmCode as payload
+      payload: alarmId, // ✅ Pass alarmId as payload
     );
 
     debugPrint("✅ Notification shown for $medicineName");
