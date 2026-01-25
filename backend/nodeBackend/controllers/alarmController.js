@@ -215,58 +215,6 @@ export const markAlarmTaken = async (req, res) => {
   }
 };
 
-export const snoozeAlarm = async (req, res) => {
-  try {
-    const { alarmId, timestamp } = req.body;
-
-    console.log("🚀 Snoozing alarm:", alarmId);
-
-    if (!alarmId) {
-      return res.status(400).json({
-        success: false,
-        message: "alarmId is required",
-      });
-    }
-
-    // ✅ Verify alarm exists
-    const alarm = await Alarm.findOne({ _id: alarmId });
-
-    if (!alarm) {
-      return res.status(404).json({
-        success: false,
-        message: "Alarm not found",
-      });
-    }
-
-    // ✅ Get all medicine IDs from this alarm
-    const medicineIds = alarm.medicines.map(m => m.medicineId);
-
-    // ✅ Increment delayed counter for all medicines in this alarm
-    await Medicine.updateMany(
-      { _id: { $in: medicineIds } },
-      { $inc: { delayed: 1 } }
-    );
-
-    console.log(`✅ Alarm snoozed: ${alarmId}`);
-
-    res.json({
-      success: true,
-      message: "Alarm snoozed for 10 minutes",
-      alarmId,
-      snoozeUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
-      timestamp: timestamp || new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error("❌ Snooze alarm error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to snooze alarm",
-      error: error.message
-    });
-  }
-};
-
 export const markAlarmMissed = async (req, res) => {
   try {
     const { alarmId } = req.body;
@@ -310,54 +258,6 @@ export const markAlarmMissed = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to mark alarm as missed",
-      error: error.message
-    });
-  }
-};
-
-export const markAlarmDelayed = async (req, res) => {
-  try {
-    const { alarmId } = req.body;
-
-    console.log("🚀 Marking alarm as delayed:", alarmId);
-
-    if (!alarmId) {
-      return res.status(400).json({
-        success: false,
-        message: "alarmId is required",
-      });
-    }
-
-    const alarm = await Alarm.findOne({ _id: alarmId });
-
-    if (!alarm) {
-      return res.status(404).json({
-        success: false,
-        message: "Alarm not found",
-      });
-    }
-
-    const medicineIds = alarm.medicines.map(m => m.medicineId);
-
-    const result = await Medicine.updateMany(
-      { _id: { $in: medicineIds } },
-      { $inc: { delayed: 1 } }
-    );
-
-    console.log(`✅ ${result.modifiedCount} medicines marked as delayed`);
-
-    res.json({
-      success: true,
-      message: "Medicines marked as delayed",
-      alarmId,
-      count: result.modifiedCount
-    });
-
-  } catch (error) {
-    console.error("❌ Mark delayed error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to mark alarm as delayed",
       error: error.message
     });
   }
