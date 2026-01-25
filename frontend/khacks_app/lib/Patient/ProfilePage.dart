@@ -15,7 +15,10 @@ class _ProfilePageState extends State<ProfilePage> {
   TimeOfDay lunchTime = const TimeOfDay(hour: 14, minute: 0);
   TimeOfDay dinnerTime = const TimeOfDay(hour: 21, minute: 0);
 
+  final TextEditingController _doctorCodeController = TextEditingController();
+
   bool isLoading = false;
+  bool isDoctorLinking = false;
 
   @override
   void initState() {
@@ -23,6 +26,12 @@ class _ProfilePageState extends State<ProfilePage> {
     breakfastTime = _parse12h("09:00 AM");
     lunchTime = _parse12h("02:00 PM");
     dinnerTime = _parse12h("09:00 PM");
+  }
+
+  @override
+  void dispose() {
+    _doctorCodeController.dispose();
+    super.dispose();
   }
 
   /// ---------------------------
@@ -67,7 +76,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   /// ---------------------------
-  /// STRICT FORMAT → hh:mm AM/PM
+  /// FORMAT → hh:mm AM/PM
   /// ---------------------------
   String _formatStrict12h(TimeOfDay time) {
     int hour = time.hour;
@@ -77,15 +86,13 @@ class _ProfilePageState extends State<ProfilePage> {
     hour = hour % 12;
     if (hour == 0) hour = 12;
 
-    final hh = hour.toString().padLeft(2, '0');
-    final mm = minute.toString().padLeft(2, '0');
-    final period = isPM ? "PM" : "AM";
-
-    return "$hh:$mm $period";
+    return "${hour.toString().padLeft(2, '0')}:"
+        "${minute.toString().padLeft(2, '0')} "
+        "${isPM ? "PM" : "AM"}";
   }
 
   /// ---------------------------
-  /// API CALL
+  /// UPDATE MEAL TIMES API
   /// ---------------------------
   Future<void> updateMealTimes() async {
     setState(() => isLoading = true);
@@ -109,23 +116,53 @@ class _ProfilePageState extends State<ProfilePage> {
       );
 
       if (response.statusCode == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Meal times updated")),
-          );
-        }
+        _showSnack("Meal times updated", Colors.green);
       } else {
-        throw Exception("Update failed");
+        throw Exception();
       }
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Server error")),
-        );
-      }
+      _showSnack("Server error", Colors.red);
     }
 
     setState(() => isLoading = false);
+  }
+
+  /// ---------------------------
+  /// ADD DOCTOR REFERRAL API
+  /// ---------------------------
+  Future<void> addDoctorReferral() async {
+    final code = _doctorCodeController.text.trim();
+
+    if (code.isEmpty) {
+      _showSnack("Enter referral code", Colors.orange);
+      return;
+    }
+
+    setState(() => isDoctorLinking = true);
+
+    try {
+      final token = await AuthService.getToken();
+
+      final response = await http.put(
+        Uri.parse("http://10.21.9.41:5000/api/patient/addDoctor"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({"referralCode": code}),
+      );
+
+      if (response.statusCode == 200) {
+        _doctorCodeController.clear();
+        _showSnack("Doctor linked successfully", Colors.green);
+      } else {
+        throw Exception();
+      }
+    } catch (_) {
+      _showSnack("Invalid referral code", Colors.red);
+    }
+
+    setState(() => isDoctorLinking = false);
   }
 
   /// ---------------------------
@@ -144,9 +181,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Sign Out'),
           ),
         ],
@@ -154,26 +189,26 @@ class _ProfilePageState extends State<ProfilePage> {
     );
 
     if (confirm == true) {
-      // Clear auth data
       await AuthService.logout();
-
       if (mounted) {
-        // Navigate to role selection and remove all previous routes
         Navigator.of(context).pushNamedAndRemoveUntil(
           '/role-selection',
               (route) => false,
-        );
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Signed out successfully'),
-            backgroundColor: Colors.green,
-          ),
         );
       }
     }
   }
 
+  void _showSnack(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color),
+    );
+  }
+
+  /// ---------------------------
+  /// UI
+  /// ---------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -183,34 +218,38 @@ class _ProfilePageState extends State<ProfilePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Sign Out',
             onPressed: _handleSignOut,
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Meal Timings Section
             const Text(
-              'Meal Timings',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              "Meal Timings",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
 
-            _tile("Breakfast Time", breakfastTime,
-                    () => _pickTime(breakfastTime, (t) => breakfastTime = t)),
-            _tile("Lunch Time", lunchTime,
-                    () => _pickTime(lunchTime, (t) => lunchTime = t)),
-            _tile("Dinner Time", dinnerTime,
-                    () => _pickTime(dinnerTime, (t) => dinnerTime = t)),
+            _tile(
+              "Breakfast Time",
+              breakfastTime,
+                  () => _pickTime(breakfastTime, (t) => breakfastTime = t),
+            ),
+            _tile(
+              "Lunch Time",
+              lunchTime,
+                  () => _pickTime(lunchTime, (t) => lunchTime = t),
+            ),
+            _tile(
+              "Dinner Time",
+              dinnerTime,
+                  () => _pickTime(dinnerTime, (t) => dinnerTime = t),
+            ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
             SizedBox(
               width: double.infinity,
@@ -223,82 +262,56 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
 
-            const Spacer(),
+            const SizedBox(height: 32),
 
-            // Sign Out Button
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
+            const Text(
+              "Doctor Referral",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _doctorCodeController,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                hintText: "Enter doctor referral code",
+                prefixIcon: const Icon(Icons.medical_services),
+                border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: _handleSignOut,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.logout,
-                            color: Colors.red,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Sign Out',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF2D3142),
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Log out from your account',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.arrow_forward_ios,
-                          size: 16,
-                          color: Colors.grey,
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 12),
+
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: isDoctorLinking ? null : addDoctorReferral,
+                child: isDoctorLinking
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Add Doctor"),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.logout, color: Colors.red),
+                label: const Text(
+                  "Sign Out",
+                  style: TextStyle(color: Colors.red),
+                ),
+                onPressed: _handleSignOut,
+              ),
+            ),
           ],
         ),
-      ),
+
+    ),
     );
   }
 

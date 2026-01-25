@@ -100,6 +100,7 @@ class _MedicationPopupDialogState extends State<MedicationPopupDialog> {
       debugPrint('✅ Loaded ${_medicines.length} TEST medicines');
     }
   }
+
   Future<void> _markAsTaken() async {
     if (_takenMedicines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

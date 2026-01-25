@@ -9,8 +9,6 @@ import '../core/input_field.dart';
 import '../services/auth_service.dart';
 import './SignUppage.dart';
 import './HomePage.dart';
-
-
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -101,8 +99,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {

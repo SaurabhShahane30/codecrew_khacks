@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:khacks_app/CareTaker/caregiver_home_screen.dart';
 import '../core/input_field.dart';
 import '../core/app_button.dart';
+import '../services/auth_service.dart';
 import 'caregiver_signup_screen.dart';
 
 class CaregiverLoginScreen extends StatefulWidget {
@@ -42,6 +43,20 @@ class _CaregiverLoginScreenState extends State<CaregiverLoginScreen> {
           "phone": phoneController.text.trim(),
           "password": passwordController.text.trim(),
         }),
+      );
+
+      final data = jsonDecode(response.body);
+      final token = data['token'];
+
+      // Extract userId from various possible field names
+      final dynamic userIdValue = data['userId'] ?? data['id'] ?? data['patientId'];
+      final String? userId = userIdValue?.toString();
+
+      // ✅ Save authentication data using AuthService
+      await AuthService.saveAuth(
+        token: token,
+        role: 'caretaker',
+        userId: userId,
       );
 
       if (response.statusCode == 200) {
